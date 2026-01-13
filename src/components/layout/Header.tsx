@@ -5,9 +5,10 @@
 
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Flame, Skull, Home, MessageSquare, Scroll } from 'lucide-react';
+import { Home, MessageSquare, Scroll } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useChatStore } from '@/stores/chatStore';
+import robotoLogo from '@/assets/roboto-logo.png';
 
 export const Header = () => {
   const location = useLocation();
@@ -32,16 +33,16 @@ export const Header = () => {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 group">
-          <div className={`p-2 rounded-lg transition-all duration-300 ${
+          <div className={`p-1 rounded-full transition-all duration-300 ${
             ventMode 
-              ? 'bg-blood/20' 
-              : 'bg-gradient-to-br from-primary/20 to-fire/20 group-hover:from-primary/30 group-hover:to-fire/30'
+              ? 'ring-2 ring-blood/50' 
+              : 'ring-2 ring-fire/30 group-hover:ring-fire/50'
           }`}>
-            {ventMode ? (
-              <Skull className="w-6 h-6 text-blood" />
-            ) : (
-              <Flame className="w-6 h-6 text-fire" />
-            )}
+            <img 
+              src={robotoLogo} 
+              alt="Roboto SAI Logo" 
+              className="w-10 h-10 rounded-full object-cover"
+            />
           </div>
           <span className="font-display font-bold text-lg text-fire hidden sm:block">
             Roboto SAI
