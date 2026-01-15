@@ -1,0 +1,51 @@
+# Roboto SAI 2026 - Fuego Eterno Edition
+# Docker Compose configuration for development and production
+
+version: '3.8'
+
+services:
+  # Development service
+  roboto-sai-dev:
+    build:
+      context: .
+      target: development
+    container_name: roboto-sai-dev
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount source code for hot reload
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    restart: unless-stopped
+    profiles:
+      - dev
+
+  # Production service
+  roboto-sai-prod:
+    build:
+      context: .
+      target: production
+    container_name: roboto-sai-prod
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    profiles:
+      - prod
+
+  # Future: Python backend service (placeholder)
+  # roboto-sai-backend:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: roboto-sai-backend
+  #   ports:
+  #     - "5000:5000"
+  #   environment:
+  #     - PYTHON_ENV=production
+  #   restart: unless-stopped
+  #   profiles:
+  #     - prod
