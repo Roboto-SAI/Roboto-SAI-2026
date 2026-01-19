@@ -15,8 +15,8 @@ RUN apt-get update && apt-get install -y \
 COPY backend/requirements.txt ./backend/
 RUN pip install --no-cache-dir -r ./backend/requirements.txt
 
-# Install SDK as editable package
-RUN pip install -e ./backend/sdk
+# Install SDK as editable package (dev mount)
+# RUN pip install -e ./backend/sdk  # Disabled - use volume mount
 
 # Copy backend code
 COPY backend ./backend
