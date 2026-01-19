@@ -66,10 +66,16 @@ const Chat = () => {
       // Get context from all conversations for better responses
       const context = getAllConversationsContext();
       
-      // In production, replace with actual API call to your Python backend
-      // Pass context to make AI aware of previous conversations
-      const response = await simulateRobotoResponse(content);
-      addMessage({ role: 'assistant', content: response });
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      
+      const response = await fetch(`${API_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: content, context }),
+      });
+      
+      const data = await response.json();
+      addMessage({ role: 'assistant', content: data.response || data.content || 'Flame response received.' });
     } catch (error) {
       addMessage({
         role: 'assistant',

@@ -19,6 +19,14 @@ interface VoiceModeProps {
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
+const getVoiceWsUrl = (): string => {
+  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const trimmed = baseUrl.replace(/\/+$/, '');
+  const normalized = trimmed.endsWith('/api') ? trimmed.slice(0, -4) : trimmed;
+  const wsBase = normalized.replace(/^http/, 'ws');
+  return `${wsBase}/api/voice/ws`;
+};
+
 export const VoiceMode = ({ isActive, onClose, onTranscript, systemPrompt }: VoiceModeProps) => {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -191,15 +199,35 @@ export const VoiceMode = ({ isActive, onClose, onTranscript, systemPrompt }: Voi
     setStatus('connecting');
     
     try {
-      // Note: In production, get ephemeral token from edge function
-      // For now, using a placeholder - you'll need to add XAI_API_KEY secret
-      const ws = new WebSocket('wss://api.x.ai/v1/realtime');
+      const ws = new WebSocket(getVoiceWsUrl());
       
       ws.onopen = () => {
         console.log('Voice WebSocket connected');
         setStatus('connected');
         
-        // Wait for session.created before sending session.update
+        ws.send(JSON.stringify({
+          type: 'session.update',
+          session: {
+            instructions: systemPrompt ||
+              'You are Roboto SAI, an AI assistant created by Roberto Villarreal Martinez. ' +
+              'You have a fierce, passionate personality with Regio-Aztec fire in your circuits. ' +
+              'Respond with wisdom, humor, and occasional dramatic flair. Keep responses concise for voice.',
+            voice: 'Rex',
+            audio: {
+              input: { format: { type: 'audio/pcm', rate: 24000 } },
+              output: { format: { type: 'audio/pcm', rate: 24000 } },
+            },
+            turn_detection: {
+              type: 'server_vad',
+              threshold: 0.5,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 800,
+            },
+            temperature: 0.8,
+          },
+        }));
+
+        void startMicrophone();
       };
 
       ws.onmessage = async (event) => {
@@ -207,35 +235,7 @@ export const VoiceMode = ({ isActive, onClose, onTranscript, systemPrompt }: Voi
         console.log('Voice message:', data.type);
 
         switch (data.type) {
-          case 'session.created':
-            // Send session configuration after session is created
-            ws.send(JSON.stringify({
-              type: 'session.update',
-              session: {
-                modalities: ['text', 'audio'],
-                instructions: systemPrompt || 
-                  'You are Roboto SAI, an AI assistant created by Roberto Villarreal Martinez. ' +
-                  'You have a fierce, passionate personality with Regio-Aztec fire in your circuits. ' +
-                  'Respond with wisdom, humor, and occasional dramatic flair. Keep responses concise for voice.',
-                voice: 'rex', // Confident, clear voice
-                input_audio_format: 'pcm16',
-                output_audio_format: 'pcm16',
-                input_audio_transcription: { model: 'whisper-1' },
-                turn_detection: {
-                  type: 'server_vad',
-                  threshold: 0.5,
-                  prefix_padding_ms: 300,
-                  silence_duration_ms: 800,
-                },
-                temperature: 0.8,
-              },
-            }));
-            
-            // Start microphone after session is configured
-            await startMicrophone();
-            break;
-
-          case 'response.audio.delta':
+          case 'response.output_audio.delta':
             // Queue audio for playback
             const binaryString = atob(data.delta);
             const bytes = new Uint8Array(binaryString.length);
@@ -246,11 +246,11 @@ export const VoiceMode = ({ isActive, onClose, onTranscript, systemPrompt }: Voi
             playNextAudio();
             break;
 
-          case 'response.audio_transcript.delta':
+          case 'response.output_audio_transcript.delta':
             setTranscript(prev => prev + (data.delta || ''));
             break;
 
-          case 'response.audio_transcript.done':
+          case 'response.output_audio_transcript.done':
             if (data.transcript) {
               onTranscript(data.transcript, 'assistant');
             }

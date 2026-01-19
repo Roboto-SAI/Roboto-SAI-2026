@@ -8,13 +8,16 @@ Created by Roberto Villarreal Martinez
 
 import os
 import logging
+import asyncio
 from typing import Dict, Any, Optional
 from datetime import datetime
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import websockets
 
 # Import Roboto SAI SDK
 from roboto_sai_sdk import RobotoSAIClient, get_xai_grok
@@ -26,6 +29,7 @@ logger = logging.getLogger(__name__)
 # Global client instance
 roboto_client: Optional[RobotoSAIClient] = None
 xai_grok = None
+VOICE_WS_URL = "wss://api.x.ai/v1/realtime"
 
 # Startup/Shutdown events
 @asynccontextmanager
@@ -34,12 +38,16 @@ async def lifespan(app: FastAPI):
     global roboto_client, xai_grok
     
     logger.info("🚀 Roboto SAI 2026 Backend Starting...")
-    
+
     try:
-        # Initialize Roboto SAI Client
-        roboto_client = RobotoSAIClient()
-        logger.info(f"✅ Roboto SAI Client initialized: {roboto_client.client_id}")
-        
+        if os.getenv("XAI_API_KEY"):
+            # Initialize Roboto SAI Client
+            roboto_client = RobotoSAIClient()
+            logger.info(f"✅ Roboto SAI Client initialized: {roboto_client.client_id}")
+        else:
+            logger.warning("⚠️ No XAI_API_KEY - running in degraded mode (no AI)")
+            roboto_client = None
+
         # Initialize xAI Grok
         xai_grok = get_xai_grok()
         if xai_grok.available:
@@ -65,7 +73,7 @@ app = FastAPI(
 # Configure CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "*"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -96,6 +104,54 @@ class EssenceData(BaseModel):
     """Essence storage request"""
     data: Dict[str, Any]
     category: Optional[str] = "general"
+
+# Voice WebSocket Proxy
+@app.websocket("/api/voice/ws")
+async def voice_proxy(websocket: WebSocket) -> None:
+    """Proxy WebSocket for Grok Voice Agent API (server-side auth)."""
+    await websocket.accept()
+
+    api_key = os.getenv("XAI_API_KEY")
+    if not api_key:
+        await websocket.close(code=1008, reason="XAI_API_KEY not configured")
+        return
+
+    try:
+        async with websockets.connect(
+            VOICE_WS_URL,
+            additional_headers={"Authorization": f"Bearer {api_key}"},
+        ) as xai_ws:
+
+            async def client_to_xai() -> None:
+                try:
+                    while True:
+                        message = await websocket.receive()
+                        if message.get("type") == "websocket.disconnect":
+                            break
+                        if "text" in message and message["text"] is not None:
+                            await xai_ws.send(message["text"])
+                        elif "bytes" in message and message["bytes"] is not None:
+                            await xai_ws.send(message["bytes"])
+                except WebSocketDisconnect:
+                    logger.info("Voice client disconnected")
+
+            async def xai_to_client() -> None:
+                try:
+                    async for message in xai_ws:
+                        if isinstance(message, bytes):
+                            await websocket.send_bytes(message)
+                        else:
+                            await websocket.send_text(message)
+                except Exception as exc:
+                    logger.error(f"Voice proxy error: {exc}")
+
+            await asyncio.wait(
+                {asyncio.create_task(client_to_xai()), asyncio.create_task(xai_to_client())},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+    except Exception as exc:
+        logger.error(f"Voice proxy connection failed: {exc}")
+        await websocket.close(code=1011, reason="Voice proxy connection failed")
 
 # Health & Status Endpoints
 @app.get("/api/status", tags=["Health"])
@@ -334,10 +390,10 @@ async def root() -> Dict[str, str]:
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
     logger.error(f"Unhandled exception: {exc}")
-    return {
-        "error": str(exc),
-        "timestamp": datetime.now().isoformat()
-    }
+    return JSONResponse(
+        status_code=500,
+        content={"error": str(exc), "timestamp": datetime.now().isoformat()}
+    )
 
 if __name__ == "__main__":
     import uvicorn

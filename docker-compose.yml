@@ -37,8 +37,8 @@ services:
   # Python FastAPI Backend - Roboto SAI 2026
   roboto-sai-backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: roboto-sai-backend
     ports:
       - "5000:5000"
@@ -47,8 +47,8 @@ services:
       - XAI_API_KEY=${XAI_API_KEY}
     env_file:
       - .env
-    volumes:
-      - ./backend:/app/backend
+    # volumes:  # DISABLED - conflicts pip install -e SDK (Debug-Reaper fix)
+      # - ./backend:/app/backend  # Re-enable for dev hot-reload after SDK fix
     restart: unless-stopped
     networks:
       - roboto-network

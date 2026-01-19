@@ -20,10 +20,9 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
-COPY bun.lockb* ./
 
 # Install Node.js dependencies
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 # Stage 2: Development
 FROM base AS development
@@ -37,8 +36,8 @@ COPY . .
 # Expose Vite dev server port (from vite.config.ts)
 EXPOSE 8080
 
-# Start development server
-CMD ["npm", "run", "dev"]
+# Start development server with host binding
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
 # Stage 3: Build
 FROM base AS build
@@ -52,10 +51,7 @@ RUN npm run build
 # Stage 4: Production
 FROM nginx:alpine AS production
 
-# Install Python in production for future backend integration
-RUN apk add --no-cache python3 py3-pip
-
-# Copy custom nginx configuration
+# Copy built files
 COPY --from=build /app/dist /usr/share/nginx/html
 
 # Create nginx config for SPA routing

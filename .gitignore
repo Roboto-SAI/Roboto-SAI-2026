@@ -23,6 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 
+# Backend
+BackendAdds/*
+backend/*
+
 # Github
 .github/*
 # Agent-Memory
@@ -30,3 +34,8 @@ AI-Memory/*
 
 # Environment
 .env
+
+# Roboto AI API keys
+.Roboto
+~
+.roboto

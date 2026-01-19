@@ -4,11 +4,10 @@
  * Regio-Aztec Fire Theme - Fuego Eterno
  */
 
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&amp;family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Inter:wght@300;400;500;600;700&display=swap');
 
 @layer base {
   :root {
