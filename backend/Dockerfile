@@ -8,8 +8,8 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy local SDK copy (Docker context fix)
-COPY sdk/roboto_sai_sdk ./backend/sdk
+# SDK via pip install -e (host mount dev, git prod)
+# COPY sdk/roboto_sai_sdk ./backend/sdk  # Disabled - use mount
 
 # Copy requirements and install dependencies
 COPY backend/requirements.txt ./backend/

@@ -3,5 +3,5 @@ uvicorn>=0.24.0
 pydantic>=2.0.0
 python-dotenv>=1.0.0
 
-# Roboto SAI SDK copied from R:\Repos\roboto-sai-sdk/roboto_sai_sdk (local install)
-# pip install -e ./backend/sdk  # Already in Dockerfile
+# SDK fallback (prod/git)
+# roboto-sai-sdk @ git+https://github.com/Roboto-SAI/roboto-sai-sdk.git@main#subdirectory=roboto_sai_sdk
