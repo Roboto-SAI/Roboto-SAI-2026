@@ -54,7 +54,17 @@ interface ChatState {
   setTheme: (theme: string) => void;
   clearMessages: () => void;
   toggleVoiceMode: () => void;
-}
+    }),
+    {
+      name: 'roboto-sai-chat-storage',
+      partialize: (state) => ({
+        conversations: state.conversations,
+        currentConversationId: state.currentConversationId,
+        currentTheme: state.currentTheme,
+      }),
+    }
+  )
+);
 
 const generateTitle = (content: string): string => {
   const cleaned = content.replace(/[^\w\s]/g, '').trim();
