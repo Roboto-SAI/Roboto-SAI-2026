@@ -8,8 +8,8 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy SDK from correct path (Debug-Reaper fix)
-COPY /r/repos/roboto-sai-sdk/roboto_sai_sdk ./backend/sdk
+# Copy local SDK copy (Docker context fix)
+COPY sdk/roboto_sai_sdk ./backend/sdk
 
 # Copy requirements and install dependencies
 COPY backend/requirements.txt ./backend/
