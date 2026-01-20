@@ -1,6 +1,9 @@
 {
   "name": "Roboto-SAI-2026 Dev",
-  "dockerComposeFile": "../docker-compose.yml",
+  "dockerComposeFile": [
+    "../docker-compose.yml",
+    "docker-compose.devcontainer.json"
+  ],
   "service": "roboto-sai-dev",
   "workspaceFolder": "/app",
   "features": {
@@ -10,7 +13,7 @@
     "ghcr.io/devcontainers/features/python:1": {
       "version": "3.12"
     },
-    "ghcr.io/devcontainers/features/docker-in-docker:3": {}
+    "ghcr.io/devcontainers/features/docker-in-docker:2.14.0": {}
   },
   "forwardPorts": [8080, 5000],
   "postCreateCommand": "npm install && cd backend && pip install -r requirements.txt",
