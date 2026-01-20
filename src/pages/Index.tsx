@@ -5,24 +5,22 @@
  */
 
 import { Link, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { MessageSquare, Flame, Scroll, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmberParticles } from '@/components/effects/EmberParticles';
+import { AuthForm } from '@/components/auth/AuthForm';
 import heroBg from '@/assets/hero-bg.jpg';
 import { useAuthStore } from '@/stores/authStore';
+
 const Index = () => {
   const navigate = useNavigate();
   const { login, isLoggedIn, username } = useAuthStore();
-  const [name, setName] = useState(username ?? '');
 
-  const handleLogin = () => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    login(trimmed);
+  const handleAuthSubmit = (data: { username: string; email: string; password: string }) => {
+    // For now, just use the username (client-side only)
+    // Email/password can be used when database is added later
+    login(data.username || data.email.split('@')[0]);
     navigate('/chat');
   };
 
@@ -112,31 +110,14 @@ const Index = () => {
               )}
             </motion.div>
 
+            {/* Auth Form */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.9 }}
               className="mt-10 flex justify-center"
             >
-              <Card className="w-full max-w-md bg-card/70 backdrop-blur-sm border-fire/20">
-                <CardHeader>
-                  <CardTitle className="text-fire">Enter the Flame</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  <Input
-                    placeholder="Enter your name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                  <Button
-                    className="btn-ember"
-                    onClick={handleLogin}
-                    disabled={!name.trim()}
-                  >
-                    Start Session
-                  </Button>
-                </CardContent>
-              </Card>
+              <AuthForm onSubmit={handleAuthSubmit} defaultUsername={username ?? ''} />
             </motion.div>
           </motion.div>
 
