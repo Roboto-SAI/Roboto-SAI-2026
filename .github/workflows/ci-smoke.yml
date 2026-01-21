@@ -1,0 +1,32 @@
+name: CI Smoke
+
+on:
+  push:
+    branches:
+      - main
+      - fix/**
+  pull_request:
+
+jobs:
+  backend-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: |
+          docker compose -f docker-compose.yml -f .devcontainer/docker-compose.devcontainer.json --profile dev build roboto-sai-backend
+
+      - name: Start backend
+        run: |
+          docker compose -f docker-compose.yml -f .devcontainer/docker-compose.devcontainer.json --profile dev up -d roboto-sai-backend
+
+      - name: Wait for health
+        run: |
+          curl --retry 10 --retry-delay 3 --retry-connrefused http://localhost:5000/api/health
+
+      - name: Shutdown
+        if: always()
+        run: |
+          docker compose -f docker-compose.yml -f .devcontainer/docker-compose.devcontainer.json --profile dev down

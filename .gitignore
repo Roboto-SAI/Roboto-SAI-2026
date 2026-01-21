@@ -33,6 +33,8 @@ backend/.pytest_cache/
 
 # Github
 .github/*
+!.github/workflows/
+!.github/workflows/**
 # Agent-Memory
 AI-Memory/*
 
