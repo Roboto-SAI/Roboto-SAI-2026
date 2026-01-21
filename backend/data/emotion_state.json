@@ -1,0 +1,89 @@
+{
+  "keyword_weights": {
+    "happy": {
+      "success": 1.0,
+      "achieve": 1.0,
+      "win": 1.0,
+      "milestone": 1.0,
+      "victory": 1.0,
+      "celebrate": 1.0,
+      "triumph": 1.0
+    },
+    "sad": {
+      "failure": 1.0,
+      "lose": 1.0,
+      "lost": 1.0,
+      "loss": 1.0,
+      "defeat": 1.0,
+      "grief": 1.0,
+      "heartbreak": 1.0,
+      "survivor": 1.0,
+      "guilt": 1.0,
+      "remorse": 1.0,
+      "unscathed": 1.0,
+      "why me": 1.0,
+      "deserving": 1.0
+    },
+    "angry": {
+      "conflict": 1.0,
+      "frustration": 1.0,
+      "fight": 1.0,
+      "betray": 1.0,
+      "injustice": 1.0,
+      "rage": 1.0
+    },
+    "surprised": {
+      "unexpected": 1.0,
+      "surprise": 1.0,
+      "shock": 1.0,
+      "sudden": 1.0,
+      "astonish": 1.0
+    },
+    "hopeful": {
+      "commitment": 1.0,
+      "pivotal": 1.0,
+      "summit": 1.0,
+      "global": 1.0,
+      "combat": 1.0,
+      "progress": 1.0,
+      "future": 1.0,
+      "promise": 1.0,
+      "relief": 1.0
+    },
+    "curious": {
+      "wonder": 1.0,
+      "question": 1.0,
+      "explore": 1.0,
+      "mystery": 1.0,
+      "discover": 1.0
+    },
+    "ecstatic": {
+      "ecstatic": 1.0,
+      "euphoria": 1.0,
+      "bliss": 1.0,
+      "overjoyed": 1.0,
+      "exhilarated": 1.0
+    },
+    "grief": {
+      "loss": 1.0,
+      "mourning": 1.0,
+      "bereavement": 1.0,
+      "sorrow": 1.0,
+      "lament": 1.0,
+      "yearning": 1.0,
+      "bereft": 1.0
+    },
+    "ptsd": {
+      "flashback": 1.0,
+      "nightmare": 1.0,
+      "hypervigilant": 1.0,
+      "irritable": 1.0,
+      "anxious": 1.0,
+      "numb": 1.0,
+      "detached": 1.0,
+      "trauma trigger": 1.0
+    }
+  },
+  "emotion_history": [],
+  "cultural_weights": {}
+}
