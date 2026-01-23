@@ -36,16 +36,4 @@ def init_db() -> None:
     logger.info("Supabase tables verified")
 
 
-def get_supabase_client():
-    """Get Supabase client for DB operations."""
-    url = os.getenv('SUPABASE_URL')
-    key = os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('SUPABASE_ANON_KEY')
-    if not url or not key:
-        logger.warning("No Supabase creds; skipping client")
-        return None
-    try:
-        from utils.supabase_client import create_client
-        return create_client(url, key)
-    except Exception as e:
-        logger.warning(f"Supabase client invalid: {e}; using None")
-        return None
+from utils.supabase_client import get_supabase_client
