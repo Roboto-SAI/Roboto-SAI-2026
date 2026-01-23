@@ -16,14 +16,15 @@ import { useAuthStore } from '@/stores/authStore';
 interface AuthFormProps {
   onSubmit: (data: { username: string; email: string; password: string }) => void;
   defaultUsername?: string;
+  initialMode?: 'login' | 'register';
 }
 
-export const AuthForm = ({ onSubmit, defaultUsername = '' }: AuthFormProps) => {
+export const AuthForm = ({ onSubmit, defaultUsername = '', initialMode = 'login' }: AuthFormProps) => {
   const { toast } = useToast();
   const { startGoogleSignIn, requestMagicLink } = useAuthStore();
 
   const [authMode, setAuthMode] = useState<'magic' | 'demo'>('magic');
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [username, setUsername] = useState(defaultUsername);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,10 +35,12 @@ export const AuthForm = ({ onSubmit, defaultUsername = '' }: AuthFormProps) => {
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!username.trim()) {
-      newErrors.username = 'Username is required';
-    } else if (username.length < 3) {
-      newErrors.username = 'Username must be at least 3 characters';
+    if (mode === 'register') {
+      if (!username.trim()) {
+        newErrors.username = 'Username is required';
+      } else if (username.length < 3) {
+        newErrors.username = 'Username must be at least 3 characters';
+      }
     }
 
     if (!email.trim()) {
@@ -46,14 +49,17 @@ export const AuthForm = ({ onSubmit, defaultUsername = '' }: AuthFormProps) => {
       newErrors.email = 'Invalid email address';
     }
 
-    if (!password) {
-      newErrors.password = 'Password is required';
-    } else if (password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-    }
+    // Demo auth is client-only; keep it frictionless.
+    if (authMode !== 'demo') {
+      if (!password) {
+        newErrors.password = 'Password is required';
+      } else if (password.length < 6) {
+        newErrors.password = 'Password must be at least 6 characters';
+      }
 
-    if (mode === 'register' && password !== confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
+      if (mode === 'register' && password !== confirmPassword) {
+        newErrors.confirmPassword = 'Passwords do not match';
+      }
     }
 
     setErrors(newErrors);
@@ -231,55 +237,59 @@ export const AuthForm = ({ onSubmit, defaultUsername = '' }: AuthFormProps) => {
                 )}
               </div>
 
-              {/* Password field */}
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm text-foreground/80">
-                  Password
-                </Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 pr-10 bg-background/50 border-border/50 focus:border-fire/50"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                {errors.password && (
-                  <p className="text-xs text-destructive">{errors.password}</p>
-                )}
-              </div>
-
-              {/* Confirm Password - only for register */}
-              {mode === 'register' && (
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword" className="text-sm text-foreground/80">
-                    Confirm Password
-                  </Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="confirmPassword"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="Confirm your password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="pl-10 bg-background/50 border-border/50 focus:border-fire/50"
-                    />
+              {authMode !== 'demo' && (
+                <>
+                  {/* Password field */}
+                  <div className="space-y-2">
+                    <Label htmlFor="password" className="text-sm text-foreground/80">
+                      Password
+                    </Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10 pr-10 bg-background/50 border-border/50 focus:border-fire/50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {errors.password && (
+                      <p className="text-xs text-destructive">{errors.password}</p>
+                    )}
                   </div>
-                  {errors.confirmPassword && (
-                    <p className="text-xs text-destructive">{errors.confirmPassword}</p>
+
+                  {/* Confirm Password - only for register */}
+                  {mode === 'register' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword" className="text-sm text-foreground/80">
+                        Confirm Password
+                      </Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          id="confirmPassword"
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="Confirm your password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          className="pl-10 bg-background/50 border-border/50 focus:border-fire/50"
+                        />
+                      </div>
+                      {errors.confirmPassword && (
+                        <p className="text-xs text-destructive">{errors.confirmPassword}</p>
+                      )}
+                    </div>
                   )}
-                </div>
+                </>
               )}
 
               {/* Login mode - username field */}

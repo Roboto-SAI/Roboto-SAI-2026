@@ -34,7 +34,7 @@ interface AuthState {
   isLoggedIn: boolean;
 
   // Legacy demo login (kept so the current landing page continues to work)
-  login: (username: string) => void;
+  login: (username: string, email?: string | null) => void;
 
   // Real backend session auth
   refreshSession: () => Promise<boolean>;
@@ -53,9 +53,9 @@ export const useAuthStore = create<AuthState>()(
       provider: null,
       isLoggedIn: false,
 
-      login: (username: string) => {
+      login: (username: string, email?: string | null) => {
         const userId = username.toLowerCase().replace(/\s+/g, '_').slice(0, 64);
-        set({ userId, username, isLoggedIn: true, provider: 'demo' });
+        set({ userId, username, email: email || null, isLoggedIn: true, provider: 'demo' });
       },
 
       refreshSession: async () => {
@@ -82,6 +82,7 @@ export const useAuthStore = create<AuthState>()(
           });
           return true;
         } catch {
+          set({ userId: null, username: null, email: null, avatarUrl: null, provider: null, isLoggedIn: false });
           return false;
         }
       },

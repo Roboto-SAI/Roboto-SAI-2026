@@ -123,6 +123,20 @@ def _get_frontend_origins() -> list[str]:
     return out
 
 
+def _get_frontend_origin() -> str:
+    return (os.getenv("FRONTEND_ORIGIN") or "http://localhost:5173").split(",")[0].strip()
+
+
+def _frontend_url(path: str) -> str:
+    origin = _get_frontend_origin().rstrip("/")
+    clean_path = (path or "").lstrip("/")
+    use_hash = (os.getenv("FRONTEND_HASH_ROUTER") or "").strip().lower() == "true"
+    if use_hash:
+        # HashRouter expects /#/<route>
+        return f"{origin}/#/{clean_path}" if clean_path else f"{origin}/#/"
+    return f"{origin}/{clean_path}" if clean_path else origin
+
+
 # Configure CORS for frontend
 app.add_middleware(
     CORSMiddleware,
@@ -337,8 +351,7 @@ async def auth_google_callback(
         session.add(user)
     await session.commit()
 
-    frontend_origin = (os.getenv("FRONTEND_ORIGIN") or "http://localhost:5173").split(",")[0].strip()
-    redirect_to = f"{frontend_origin}/chat"
+    redirect_to = _frontend_url("/chat")
     resp = RedirectResponse(url=redirect_to, status_code=302)
     resp.delete_cookie(OAUTH_STATE_COOKIE_NAME, path="/")
     await _create_session_cookie(resp, session, user.id)
@@ -398,8 +411,7 @@ async def auth_magic_verify(token: str, session: AsyncSession = Depends(get_sess
     row.used_at = now
     await session.commit()
 
-    frontend_origin = (os.getenv("FRONTEND_ORIGIN") or "http://localhost:5173").split(",")[0].strip()
-    redirect_to = f"{frontend_origin}/chat"
+    redirect_to = _frontend_url("/chat")
     resp = RedirectResponse(url=redirect_to, status_code=302)
     await _create_session_cookie(resp, session, user.id)
     return resp

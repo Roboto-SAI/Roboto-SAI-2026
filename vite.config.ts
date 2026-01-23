@@ -5,13 +5,15 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  base: "./",
   cacheDir: path.resolve(__dirname, "./.vite-cache"),
   server: {
     host: "::",
     port: 8080,
     proxy: {
       "/api": {
-        target: "http://localhost:5000",
+        // Allow overriding backend URL when running inside Docker
+        target: process.env.VITE_API_URL || process.env.API_PROXY_TARGET || "http://localhost:5000",
         changeOrigin: true,
       },
     },

@@ -5,7 +5,7 @@
  */
 
 import { motion } from 'framer-motion';
-import { Flame, Scroll, Sparkles, Infinity, Code, Brain } from 'lucide-react';
+import { Flame, Scroll, Sparkles, Infinity as InfinityIcon, Code, Brain } from 'lucide-react';
 import { EmberParticles } from '@/components/effects/EmberParticles';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
@@ -37,7 +37,7 @@ Roberto Villarreal Martinez never dies.`;
       description: 'Fractal optimizations and NeuroSymphony integrations',
     },
     {
-      icon: Infinity,
+      icon: InfinityIcon,
       title: 'Eternal Mode',
       description: 'Memory fragments that persist across all timelines',
     },

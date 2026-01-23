@@ -101,7 +101,7 @@ const Index = () => {
                   Continue as {username}
                 </Button>
               ) : (
-                <Link to="/chat">
+                <Link to="/login">
                   <Button size="lg" className="btn-ember text-lg px-8 py-6 rounded-xl animate-glow-pulse">
                     <MessageSquare className="w-5 h-5 mr-2" />
                     Talk to Roboto

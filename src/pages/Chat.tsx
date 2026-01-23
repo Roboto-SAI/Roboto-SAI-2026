@@ -52,7 +52,7 @@ const getApiBaseUrl = (): string => {
 
 const Chat = () => {
   const navigate = useNavigate();
-  const { userId, isLoggedIn, refreshSession } = useAuthStore();
+  const { userId, isLoggedIn, refreshSession, provider } = useAuthStore();
   const { 
     getMessages, 
     isLoading, 
@@ -84,24 +84,25 @@ const Chat = () => {
 
   useEffect(() => {
     (async () => {
+      if (provider === 'demo') return;
       const ok = await refreshSession();
       if (!ok) {
-        navigate('/');
-        return;
+        navigate('/login');
       }
     })();
-  }, [refreshSession, navigate]);
+  }, [provider, refreshSession, navigate]);
 
   useEffect(() => {
     if (!isLoggedIn) return;
+    if (provider === 'demo') return;
     if (userId && userId !== storeUserId) {
       loadUserHistory(userId);
     }
-  }, [isLoggedIn, userId, storeUserId, loadUserHistory]);
+  }, [isLoggedIn, provider, userId, storeUserId, loadUserHistory]);
 
   const handleSend = async (content: string, attachments?: FileAttachment[]) => {
     if (!isLoggedIn || !userId) {
-      navigate('/');
+      navigate('/login');
       return;
     }
 
@@ -110,6 +111,12 @@ const Chat = () => {
     setLoading(true);
 
     try {
+      if (provider === 'demo') {
+        const responseText = await simulateRobotoResponse(content);
+        addMessage({ role: 'assistant', content: responseText });
+        return;
+      }
+
       // Get context from all conversations for better responses
       const context = getAllConversationsContext();
       const sessionId = currentConversationId || createNewConversation();

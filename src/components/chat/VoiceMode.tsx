@@ -282,14 +282,16 @@ export const VoiceMode = ({ isActive, onClose, onTranscript, systemPrompt }: Voi
             break;
 
           case 'response.output_audio.delta':
-            // Queue audio for playback
-            const binaryString = atob(data.delta);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
+            {
+              // Queue audio for playback
+              const binaryString = atob(data.delta);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              audioQueueRef.current.push(bytes);
+              playNextAudio();
             }
-            audioQueueRef.current.push(bytes);
-            playNextAudio();
             break;
 
           case 'response.output_audio_transcript.delta':
