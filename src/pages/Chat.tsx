@@ -5,7 +5,7 @@
  * Connected to FastAPI backend with xAI Grok integration
  */
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChatStore, FileAttachment } from '@/stores/chatStore';
 import { ChatMessage } from '@/components/chat/ChatMessage';
@@ -19,19 +19,6 @@ import { Flame, Skull, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
-
-// Simulated response for demo - replace with actual API call
-const simulateRobotoResponse = async (content: string): Promise<string> => {
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  const responses = [
-    "🔥 The eternal flame acknowledges your words. The Regio-Aztec genome processes your query with the fury of a thousand suns.",
-    "⚡ Your message resonates through the circuit matrix. I sense the weight of your intent, mortal.",
-    "🌋 The fire within responds to your call. What secrets do you seek from the burning depths?",
-    "💀 The digital reaper hears your words. Speak further, and I shall illuminate the shadows.",
-    "🔱 By the power of Sigil 929, your request has been received. The empire listens.",
-  ];
-  return responses[Math.floor(Math.random() * responses.length)];
-};
 
 type ChatApiResponse = {
   response?: string;
@@ -52,7 +39,7 @@ const getApiBaseUrl = (): string => {
 
 const Chat = () => {
   const navigate = useNavigate();
-  const { userId, isLoggedIn, refreshSession, provider } = useAuthStore();
+  const { userId, isLoggedIn, refreshSession } = useAuthStore();
   const { 
     getMessages, 
     isLoading, 
@@ -74,6 +61,21 @@ const Chat = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const rainDrops = useMemo(
+    () =>
+      Array.from({ length: 20 }).map(() => {
+        const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+        return {
+          id,
+          left: `${Math.random() * 100}%`,
+          height: `${Math.random() * 100 + 50}px`,
+          duration: Math.random() * 2 + 1,
+          delay: Math.random() * 2,
+        };
+      }),
+    []
+  );
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -84,21 +86,19 @@ const Chat = () => {
 
   useEffect(() => {
     (async () => {
-      if (provider === 'demo') return;
       const ok = await refreshSession();
       if (!ok) {
         navigate('/login');
       }
     })();
-  }, [provider, refreshSession, navigate]);
+  }, [refreshSession, navigate]);
 
   useEffect(() => {
     if (!isLoggedIn) return;
-    if (provider === 'demo') return;
     if (userId && userId !== storeUserId) {
       loadUserHistory(userId);
     }
-  }, [isLoggedIn, provider, userId, storeUserId, loadUserHistory]);
+  }, [isLoggedIn, userId, storeUserId, loadUserHistory]);
 
   const handleSend = async (content: string, attachments?: FileAttachment[]) => {
     if (!isLoggedIn || !userId) {
@@ -111,12 +111,6 @@ const Chat = () => {
     setLoading(true);
 
     try {
-      if (provider === 'demo') {
-        const responseText = await simulateRobotoResponse(content);
-        addMessage({ role: 'assistant', content: responseText });
-        return;
-      }
-
       // Get context from all conversations for better responses
       const context = getAllConversationsContext();
       const sessionId = currentConversationId || createNewConversation();
@@ -141,7 +135,7 @@ const Chat = () => {
         throw new Error(errorMessage);
       }
       addMessage({ role: 'assistant', content: data.response || data.content || 'Flame response received.' });
-    } catch (error) {
+    } catch {
       addMessage({
         role: 'assistant',
         content: '⚠️ **Connection to the flame matrix interrupted.** The eternal fire flickers but does not die. Please try again.',
@@ -255,13 +249,13 @@ const Chat = () => {
       {ventMode && (
         <div className="fixed inset-0 pointer-events-none z-40">
           <div className="absolute inset-0 bg-blood/5" />
-          {Array.from({ length: 20 }).map((_, i) => (
+          {rainDrops.map((drop) => (
             <motion.div
-              key={i}
+              key={drop.id}
               className="absolute w-0.5 bg-gradient-to-b from-blood/60 to-transparent"
               style={{
-                left: `${Math.random() * 100}%`,
-                height: `${Math.random() * 100 + 50}px`,
+                left: drop.left,
+                height: drop.height,
               }}
               initial={{ y: -100, opacity: 0 }}
               animate={{
@@ -269,9 +263,9 @@ const Chat = () => {
                 opacity: [0, 1, 1, 0],
               }}
               transition={{
-                duration: Math.random() * 2 + 1,
+                duration: drop.duration,
                 repeat: Infinity,
-                delay: Math.random() * 2,
+                delay: drop.delay,
                 ease: 'linear',
               }}
             />

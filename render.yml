@@ -23,12 +23,22 @@ services:
     envVars:
       - key: XAI_API_KEY
         sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: FRONTEND_HASH_ROUTER
+        value: "true"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SESSION_TTL_SECONDS
+        value: "2592000"
       - key: PYTHON_ENV
         value: production
       - key: ROBO_EMOTION_STATE_PATH
         value: /var/data/emotion_state.json
-      - key: DATABASE_URL
-        value: sqlite+aiosqlite:////var/data/roboto.db
     healthCheckPath: /api/health
     healthCheckStartupFailureThreshold: 10
 

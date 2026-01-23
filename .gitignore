@@ -10,6 +10,9 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.vite-cache
+tsconfig.app.tsbuildinfo
+tsconfig.node.tsbuildinfo
 *.local
 
 # Editor directories and files
@@ -43,6 +46,9 @@ AI-Memory/*
 
 # Environment
 .env
+.env.backup
+.env.local
+.env.*.local
 
 # Roboto AI API keys
 .Roboto

@@ -17,14 +17,15 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Depends
+from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+# from sqlalchemy import select
+# from sqlalchemy.ext.asyncio import AsyncSession  # Deprecated
 import httpx
 import websockets
+from dotenv import load_dotenv
 
 # LangChain imports
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
@@ -32,15 +33,18 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 # Import Roboto SAI SDK
 from roboto_sai_sdk import RobotoSAIClient, get_xai_grok
-from db import get_session, init_db
-from models import Message, User, AuthSession, MagicLinkToken
+from db import init_db, get_supabase_client
+# from models import Message  # Deprecated post-Supabase
 from advanced_emotion_simulator import AdvancedEmotionSimulator
-from langchain_memory import SQLMessageHistory
+from langchain_memory import SupabaseMessageHistory
 from grok_llm import GrokLLM
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Load local .env when running outside Docker
+load_dotenv()
 
 # Global client instance
 roboto_client: Optional[RobotoSAIClient] = None
@@ -58,7 +62,7 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Roboto SAI 2026 Backend Starting...")
 
     try:
-        await init_db()
+        init_db()
 
         state_path = os.getenv("ROBO_EMOTION_STATE_PATH", "./data/emotion_state.json")
         emotion_simulator_instance = AdvancedEmotionSimulator()
@@ -148,11 +152,10 @@ app.add_middleware(
 
 
 SESSION_COOKIE_NAME = "roboto_session"
-OAUTH_STATE_COOKIE_NAME = "roboto_oauth_state"
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.utcnow()
 
 
 def _session_ttl() -> timedelta:
@@ -163,50 +166,51 @@ def _session_ttl() -> timedelta:
         return timedelta(days=7)
 
 
-def _hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+def _cookie_secure(request: Request) -> bool:
+    env = os.getenv("COOKIE_SECURE")
+    if env is not None:
+        return env.strip().lower() == "true"
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    scheme = forwarded_proto or request.url.scheme
+    return scheme == "https"
 
 
-async def _create_session_cookie(response: RedirectResponse, session: AsyncSession, user_id: str) -> None:
-    sess_id = secrets.token_urlsafe(32)
-    expires_at = _utcnow() + _session_ttl()
-    session.add(AuthSession(id=sess_id, user_id=user_id, expires_at=expires_at))
-    await session.commit()
-
-    # Note: In production behind HTTPS, set COOKIE_SECURE=true
-    secure = (os.getenv("COOKIE_SECURE", "").lower() == "true")
-    response.set_cookie(
-        key=SESSION_COOKIE_NAME,
-        value=sess_id,
-        httponly=True,
-        secure=secure,
-        samesite="lax",
-        max_age=int(_session_ttl().total_seconds()),
-        path="/",
-    )
+def _cookie_samesite() -> str:
+    raw = (os.getenv("COOKIE_SAMESITE") or "lax").strip().lower()
+    if raw not in {"lax", "strict", "none"}:
+        return "lax"
+    return raw
 
 
-async def get_current_user(
-    request,  # FastAPI Request type avoided to keep imports minimal
-    session: AsyncSession = Depends(get_session),
-) -> User:
+def _require_supabase():
+    supabase = get_supabase_client()
+    if supabase is None:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+    return supabase
+
+
+async def get_current_user(request: Request) -> Dict[str, Any]:
+    """Get current user from auth_sessions cookie."""
     sess_id = request.cookies.get(SESSION_COOKIE_NAME)
     if not sess_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    now = _utcnow()
-    sess_res = await session.execute(
-        select(AuthSession).where(AuthSession.id == sess_id).where(AuthSession.expires_at > now)
-    )
-    sess = sess_res.scalar_one_or_none()
-    if not sess:
+    supabase = _require_supabase()
+    now = _utcnow().isoformat()
+    
+    # Check session
+    result = supabase.table("auth_sessions").select("user_id").eq("id", sess_id).gte("expires_at", now).execute()
+    if not result.data:
         raise HTTPException(status_code=401, detail="Session expired")
-
-    user_res = await session.execute(select(User).where(User.id == sess.user_id))
-    user = user_res.scalar_one_or_none()
-    if not user:
+    
+    user_id = result.data[0]["user_id"]
+    
+    # Get user
+    user_result = supabase.table("users").select("*").eq("id", user_id).execute()
+    if not user_result.data:
         raise HTTPException(status_code=401, detail="User not found")
-    return user
+    
+    return user_result.data[0]
 
 
 class MagicRequest(BaseModel):
@@ -214,207 +218,129 @@ class MagicRequest(BaseModel):
 
 
 @app.get("/api/auth/me", tags=["Auth"])
-async def auth_me(user: User = Depends(get_current_user)) -> Dict[str, Any]:
+async def auth_me(user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     return {
         "user": {
-            "id": user.id,
-            "email": user.email,
-            "display_name": user.display_name,
-            "avatar_url": user.avatar_url,
-            "provider": user.provider,
+            "id": user["id"],
+            "email": user["email"],
+            "display_name": user["display_name"],
+            "avatar_url": user["avatar_url"],
+            "provider": user["provider"],
         }
     }
 
 
 @app.post("/api/auth/logout", tags=["Auth"])
-async def auth_logout(request, session: AsyncSession = Depends(get_session)) -> JSONResponse:
+async def auth_logout(request: Request) -> JSONResponse:
     sess_id = request.cookies.get(SESSION_COOKIE_NAME)
     if sess_id:
-        sess_res = await session.execute(select(AuthSession).where(AuthSession.id == sess_id))
-        sess = sess_res.scalar_one_or_none()
-        if sess:
-            await session.delete(sess)
-            await session.commit()
+        supabase = get_supabase_client()
+        if supabase is not None:
+            supabase.table('auth_sessions').delete().eq('id', sess_id).execute()
 
     resp = JSONResponse({"success": True})
     resp.delete_cookie(SESSION_COOKIE_NAME, path="/")
     return resp
 
 
-@app.get("/api/auth/google/start", tags=["Auth"])
-async def auth_google_start(request) -> RedirectResponse:
-    client_id = os.getenv("GOOGLE_CLIENT_ID")
-    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
-    if not client_id or not redirect_uri:
-        raise HTTPException(status_code=500, detail="Google OAuth not configured")
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
 
-    state = secrets.token_urlsafe(16)
-    params = {
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
-        "response_type": "code",
-        "scope": "openid email profile",
-        "access_type": "online",
-        "prompt": "select_account",
-        "state": state,
-    }
-    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
-    resp = RedirectResponse(url=url, status_code=302)
-    resp.set_cookie(
-        key=OAUTH_STATE_COOKIE_NAME,
-        value=state,
-        httponly=True,
-        secure=(os.getenv("COOKIE_SECURE", "").lower() == "true"),
-        samesite="lax",
-        max_age=300,
-        path="/",
-    )
-    return resp
-
-
-@app.get("/api/auth/google/callback", tags=["Auth"])
-async def auth_google_callback(
-    request,
-    code: str,
-    state: str,
-    session: AsyncSession = Depends(get_session),
-) -> RedirectResponse:
-    expected_state = request.cookies.get(OAUTH_STATE_COOKIE_NAME)
-    if not expected_state or state != expected_state:
-        raise HTTPException(status_code=400, detail="Invalid OAuth state")
-
-    client_id = os.getenv("GOOGLE_CLIENT_ID")
-    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
-    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
-    if not client_id or not client_secret or not redirect_uri:
-        raise HTTPException(status_code=500, detail="Google OAuth not configured")
-
-    token_url = "https://oauth2.googleapis.com/token"
-    async with httpx.AsyncClient(timeout=15) as client:
-        token_res = await client.post(
-            token_url,
-            data={
-                "code": code,
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "redirect_uri": redirect_uri,
-                "grant_type": "authorization_code",
-            },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
+@app.post("/api/auth/register", tags=["Auth"])
+async def auth_register(req: RegisterRequest, request: Request) -> JSONResponse:
+    """Register new user with Supabase Auth + local session."""
+    supabase = _require_supabase()
+    
+    try:
+        result = supabase.auth.sign_up({"email": req.email, "password": req.password})
+        if not result.user:
+            raise HTTPException(status_code=400, detail=result.error.message if result.error else "Registration failed")
+        
+        user_id = result.user.id
+        # Local user
+        user_data = {
+            "id": user_id,
+            "email": req.email,
+            "display_name": req.email.split("@")[0],
+            "provider": "supabase"
+        }
+        supabase.table("users").upsert(user_data).execute()
+        
+        # Local session cookie
+        sess_id = secrets.token_urlsafe(32)
+        expires = (_utcnow() + _session_ttl()).isoformat()
+        supabase.table("auth_sessions").insert({"id": sess_id, "user_id": user_id, "expires_at": expires}).execute()
+        
+        resp = JSONResponse({"success": True, "user": user_data})
+        resp.set_cookie(
+            key=SESSION_COOKIE_NAME,
+            value=sess_id,
+            httponly=True,
+            secure=_cookie_secure(request),
+            samesite=_cookie_samesite(),
+            max_age=int(_session_ttl().total_seconds()),
+            path="/",
         )
-        if token_res.status_code >= 400:
-            raise HTTPException(status_code=400, detail=f"Google token exchange failed ({token_res.status_code})")
-        tokens = token_res.json()
-        access_token = tokens.get("access_token")
-        if not access_token:
-            raise HTTPException(status_code=400, detail="Missing access_token")
+        return resp
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-        userinfo_res = await client.get(
-            "https://openidconnect.googleapis.com/v1/userinfo",
-            headers={"Authorization": f"Bearer {access_token}"},
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+@app.post("/api/auth/login", tags=["Auth"])
+async def auth_login(req: LoginRequest, request: Request) -> JSONResponse:
+    """Login with Supabase Auth + local session."""
+    supabase = _require_supabase()
+    
+    try:
+        result = supabase.auth.sign_in_with_password({"email": req.email, "password": req.password})
+        if not result.user:
+            raise HTTPException(status_code=401, detail=result.error.message if result.error else "Login failed")
+        
+        user_id = result.user.id
+        # Local user
+        user_data = {
+            "id": user_id,
+            "email": req.email,
+            "display_name": result.user.user_metadata.get("display_name", req.email.split("@")[0]) if result.user.user_metadata else req.email.split("@")[0],
+            "provider": "supabase"
+        }
+        supabase.table("users").upsert(user_data).execute()
+        
+        # Local session cookie
+        sess_id = secrets.token_urlsafe(32)
+        expires = (_utcnow() + _session_ttl()).isoformat()
+        supabase.table("auth_sessions").insert({"id": sess_id, "user_id": user_id, "expires_at": expires}).execute()
+        
+        resp = JSONResponse({"success": True, "user": user_data})
+        resp.set_cookie(
+            key=SESSION_COOKIE_NAME,
+            value=sess_id,
+            httponly=True,
+            secure=_cookie_secure(request),
+            samesite=_cookie_samesite(),
+            max_age=int(_session_ttl().total_seconds()),
+            path="/",
         )
-        if userinfo_res.status_code >= 400:
-            raise HTTPException(status_code=400, detail="Failed to fetch Google userinfo")
-        info = userinfo_res.json()
-
-    email = info.get("email")
-    sub = info.get("sub")
-    name = info.get("name")
-    picture = info.get("picture")
-    if not email or not sub:
-        raise HTTPException(status_code=400, detail="Google userinfo incomplete")
-
-    # Upsert user
-    existing_res = await session.execute(
-        select(User).where((User.provider == "google") & (User.provider_sub == sub))
-    )
-    user = existing_res.scalar_one_or_none()
-    if not user:
-        by_email_res = await session.execute(select(User).where(User.email == email))
-        user = by_email_res.scalar_one_or_none()
-
-    if user:
-        user.email = email
-        user.display_name = name or user.display_name
-        user.avatar_url = picture or user.avatar_url
-        user.provider = "google"
-        user.provider_sub = sub
-    else:
-        user = User(
-            id=secrets.token_urlsafe(16)[:64],
-            email=email,
-            display_name=name,
-            avatar_url=picture,
-            provider="google",
-            provider_sub=sub,
-        )
-        session.add(user)
-    await session.commit()
-
-    redirect_to = _frontend_url("/chat")
-    resp = RedirectResponse(url=redirect_to, status_code=302)
-    resp.delete_cookie(OAUTH_STATE_COOKIE_NAME, path="/")
-    await _create_session_cookie(resp, session, user.id)
-    return resp
+        return resp
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=str(e))
 
 
 @app.post("/api/auth/magic/request", tags=["Auth"])
-async def auth_magic_request(req: MagicRequest, session: AsyncSession = Depends(get_session)) -> Dict[str, Any]:
-    email = (req.email or "").strip().lower()
-    if not email or "@" not in email:
-        raise HTTPException(status_code=400, detail="Invalid email")
-
-    token = secrets.token_urlsafe(32)
-    token_hash = _hash_token(token)
-    expires_at = _utcnow() + timedelta(minutes=15)
-    session.add(MagicLinkToken(token_hash=token_hash, email=email, expires_at=expires_at))
-    await session.commit()
-
-    base_url = os.getenv("GOOGLE_REDIRECT_URI")
-    # If GOOGLE_REDIRECT_URI is set, its host is the backend public URL; otherwise assume local.
-    backend_base = "http://localhost:5000"
-    if base_url and "/api/auth/google/callback" in base_url:
-        backend_base = base_url.split("/api/auth/google/callback")[0]
-
-    verify_url = f"{backend_base}/api/auth/magic/verify?{urlencode({'token': token})}"
-
-    # Email sending is not wired yet. For now, log to server.
-    logger.info(f"[MAGIC LINK] {email} -> {verify_url}")
-
-    return {"success": True}
-
-
-@app.get("/api/auth/magic/verify", tags=["Auth"])
-async def auth_magic_verify(token: str, session: AsyncSession = Depends(get_session)) -> RedirectResponse:
-    token_hash = _hash_token(token)
-    now = _utcnow()
-    res = await session.execute(select(MagicLinkToken).where(MagicLinkToken.token_hash == token_hash))
-    row = res.scalar_one_or_none()
-    if not row or row.used_at is not None or row.expires_at <= now:
-        raise HTTPException(status_code=400, detail="Invalid or expired magic link")
-
-    email = row.email
-    user_res = await session.execute(select(User).where(User.email == email))
-    user = user_res.scalar_one_or_none()
-    if not user:
-        user = User(
-            id=secrets.token_urlsafe(16)[:64],
-            email=email,
-            display_name=email.split("@")[0],
-            avatar_url=None,
-            provider="magic",
-            provider_sub=None,
-        )
-        session.add(user)
-
-    row.user_id = user.id
-    row.used_at = now
-    await session.commit()
-
-    redirect_to = _frontend_url("/chat")
-    resp = RedirectResponse(url=redirect_to, status_code=302)
-    await _create_session_cookie(resp, session, user.id)
-    return resp
+async def auth_magic_request(req: MagicRequest) -> Dict[str, Any]:
+    """Request magic link (Supabase OTP)."""
+    supabase = _require_supabase()
+    
+    try:
+        supabase.auth.sign_in_with_otp({"email": req.email})
+        return {"success": True, "message": "Magic link sent"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 # Pydantic Models
 class ChatMessage(BaseModel):
@@ -458,6 +384,11 @@ class EssenceData(BaseModel):
     """Essence storage request"""
     data: Dict[str, Any]
     category: Optional[str] = "general"
+
+class FeedbackRequest(BaseModel):
+    """Message feedback request"""
+    message_id: int
+    rating: int  # 1=thumbs up, -1=thumbs down
 
 # Voice WebSocket Proxy
 @app.websocket("/api/voice/ws")
@@ -589,21 +520,10 @@ async def get_emotion_stats() -> Dict[str, Any]:
 @app.post("/api/chat", tags=["Chat"])
 async def chat_with_grok(
     request: ChatMessage,
-    session: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user),
+    user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Chat with xAI Grok using Roboto SAI context with LangChain memory
-    
-    Args:
-        message: User message
-        context: Optional Roboto context
-        reasoning_effort: "low" or "high"
-        user_id: User identifier
-        session_id: Session identifier
-    
-    Returns:
-        Grok response with conversation memory
     """
     if not grok_llm or not xai_grok or not xai_grok.available:
         raise HTTPException(status_code=503, detail="Grok not available")
@@ -633,9 +553,9 @@ async def chat_with_grok(
             except Exception as emotion_error:
                 logger.warning(f"Emotion simulation (user) failed: {emotion_error}")
 
-        # Load conversation history (user_id derived from authenticated session)
-        history_store = SQLMessageHistory(session_id=session_id, user_id=user.id)
-        history_messages = await history_store._get_messages_async()
+        # Load conversation history
+        history_store = SupabaseMessageHistory(session_id=session_id, user_id=user["id"])
+        history_messages = history_store.messages  # sync property
         
         # Prepare user message with emotion
         user_message = HumanMessage(
@@ -669,8 +589,7 @@ async def chat_with_grok(
             except Exception as emotion_error:
                 logger.warning(f"Emotion simulation (assistant) failed: {emotion_error}")
 
-        # Save conversation to database with emotions
-        user_message.additional_kwargs.update(user_emotion or {})
+        # Save conversation
         await history_store.add_message(user_message)
         
         assistant_message = AIMessage(
@@ -698,41 +617,62 @@ async def chat_with_grok(
 
 @app.get("/api/chat/history", tags=["Chat"])
 async def get_chat_history(
-    session_id: Optional[str] = None,
-    limit: int = 50,
-    session: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user),
+  session_id: Optional[str] = None,
+  limit: int = 50,
+  user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Retrieve recent chat history."""
-    stmt = select(Message).order_by(Message.created_at.desc()).limit(limit)
-    stmt = stmt.where(Message.user_id == user.id)
-    if session_id:
-        stmt = stmt.where(Message.session_id == session_id)
+  """Retrieve recent chat history."""
+  supabase = get_supabase_client()
+  query = supabase.table('messages').select('*').eq('user_id', user['id']).order('created_at', desc=True).limit(limit)
+  if session_id:
+    query = query.eq('session_id', session_id)
+  result = query.execute()
+  messages = result.data or []
+  return {
+    "success": True,
+    "count": len(messages),
+    "messages": [
+      {
+        "id": msg['id'],
+        "user_id": msg['user_id'],
+        "session_id": msg['session_id'],
+        "role": msg['role'],
+        "content": msg['content'],
+        "emotion": msg['emotion'],
+        "emotion_text": msg['emotion_text'],
+        "emotion_probabilities": json.loads(msg['emotion_probabilities']) if msg['emotion_probabilities'] else None,
+        "created_at": msg['created_at'],
+      }
+      for msg in messages
+    ],
+    "timestamp": datetime.now().isoformat(),
+  }
 
-    result = await session.execute(stmt)
-    messages = list(reversed(result.scalars().all()))
 
+@app.post("/api/chat/feedback", tags=["Chat"])
+async def submit_feedback(
+    feedback: FeedbackRequest,
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Submit thumbs up/down feedback for a message."""
+    # Validate rating
+    if feedback.rating not in [1, -1]:
+        raise HTTPException(status_code=400, detail="Rating must be 1 (thumbs up) or -1 (thumbs down)")
+    
+    supabase = get_supabase_client()
+    data = {
+        "message_id": feedback.message_id,
+        "user_id": user["id"],
+        "rating": feedback.rating,
+    }
+    supabase.table('message_feedback').insert(data).execute()
+    
     return {
         "success": True,
-        "count": len(messages),
-        "messages": [
-            {
-                "id": message.id,
-                "user_id": message.user_id,
-                "session_id": message.session_id,
-                "role": message.role,
-                "content": message.content,
-                "emotion": message.emotion,
-                "emotion_text": message.emotion_text,
-                "emotion_probabilities": json.loads(message.emotion_probabilities)
-                if message.emotion_probabilities
-                else None,
-                "created_at": message.created_at.isoformat() if message.created_at else None,
-            }
-            for message in messages
-        ],
+        "message": "Feedback recorded. The eternal flame adapts.",
         "timestamp": datetime.now().isoformat(),
     }
+
 
 # Reaper Mode Endpoint
 @app.post("/api/reap", tags=["Reaper"])

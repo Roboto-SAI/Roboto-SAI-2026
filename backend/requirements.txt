@@ -17,3 +17,4 @@ langchain-community>=0.3.10,<0.4.0
 qutip==5.2.2
 numpy>=1.24.0
 scipy>=1.13.0
+supabase==2.8.0

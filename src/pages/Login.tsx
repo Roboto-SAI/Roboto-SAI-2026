@@ -10,12 +10,18 @@ import { useAuthStore } from '@/stores/authStore';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login, username } = useAuthStore();
+  const { loginWithPassword, refreshSession, username } = useAuthStore();
 
-  const handleDemoSubmit = (data: { username: string; email: string; password: string }) => {
-    login(data.username || data.email.split('@')[0], data.email);
-    toast.success('Welcome to the eternal flame, fam! 😈');
-    navigate('/chat');
+  const handleAuthSubmit = async (data: { username: string; email: string; password: string }) => {
+    try {
+      await loginWithPassword(data.email, data.password);
+      await refreshSession();
+      toast.success('Welcome to the eternal flame!');
+      navigate('/chat');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Login failed';
+      toast.error(message);
+    }
   };
 
   return (
@@ -36,7 +42,7 @@ const Login = () => {
         animate={{ opacity: 1, y: 0 }}
         className="relative z-10 w-full flex justify-center"
       >
-        <AuthForm onSubmit={handleDemoSubmit} defaultUsername={username ?? ''} initialMode="login" />
+        <AuthForm onSubmit={handleAuthSubmit} defaultUsername={username ?? ''} initialMode="login" />
       </motion.div>
     </div>
   );

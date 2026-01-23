@@ -8,6 +8,7 @@ import { forwardRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { User, Bot, Paperclip, FileText, Image } from 'lucide-react';
 import type { Message, FileAttachment } from '@/stores/chatStore';
+import { MessageFeedback } from './MessageFeedback';
 
 interface ChatMessageProps {
   message: Message;
@@ -123,6 +124,11 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(({ messa
         <p className="text-[10px] text-muted-foreground mt-2 opacity-60">
           {new Date(message.timestamp).toLocaleTimeString()}
         </p>
+        
+        {/* Feedback for assistant messages */}
+        {!isUser && message.id && (
+          <MessageFeedback messageId={message.id} />
+        )}
       </div>
     </motion.div>
   );

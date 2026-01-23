@@ -157,6 +157,12 @@ Open http://localhost:8080 and try:
 XAI_API_KEY=your_grok_api_key_here
 ```
 
+**Supabase:**
+- SUPABASE_URL: Project API URL (Dashboard → Settings → API)
+- SUPABASE_SERVICE_ROLE_KEY: Service role key (bypasses RLS; Dashboard → Settings → API → service_role)
+- SUPABASE_ANON_KEY: Anon/publishable key (dev ok, RLS=false tables)
+Backend prefers service_role; auto-fallbacks to anon on invalid.
+
 **Secrets Safe:**
 ✅ .env in .gitignore
 ✅ Docker secrets passed via env_file

@@ -9,20 +9,12 @@ import { motion } from 'framer-motion';
 import { MessageSquare, Flame, Scroll, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EmberParticles } from '@/components/effects/EmberParticles';
-import { AuthForm } from '@/components/auth/AuthForm';
 import heroBg from '@/assets/hero-bg.jpg';
 import { useAuthStore } from '@/stores/authStore';
 
 const Index = () => {
   const navigate = useNavigate();
-  const { login, isLoggedIn, username } = useAuthStore();
-
-  const handleAuthSubmit = (data: { username: string; email: string; password: string }) => {
-    // For now, just use the username (client-side only)
-    // Email/password can be used when database is added later
-    login(data.username || data.email.split('@')[0]);
-    navigate('/chat');
-  };
+  const { isLoggedIn, username } = useAuthStore();
 
   return <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Ember Particles Background */}
@@ -117,7 +109,11 @@ const Index = () => {
               transition={{ delay: 0.9 }}
               className="mt-10 flex justify-center"
             >
-              <AuthForm onSubmit={handleAuthSubmit} defaultUsername={username ?? ''} />
+              <Link to="/login">
+                <Button size="lg" variant="secondary" className="px-8 py-6 rounded-xl">
+                  Sign in or create an account
+                </Button>
+              </Link>
             </motion.div>
           </motion.div>
 
