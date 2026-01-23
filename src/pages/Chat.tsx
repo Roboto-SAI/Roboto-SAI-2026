@@ -25,6 +25,8 @@ type ChatApiResponse = {
   content?: string;
   error?: string;
   detail?: string;
+  assistant_message_id?: string;
+  user_message_id?: string;
 };
 
 const getApiBaseUrl = (): string => {
@@ -132,7 +134,11 @@ const Chat = () => {
         const errorMessage = data.detail || data.error || `Request failed (${response.status})`;
         throw new Error(errorMessage);
       }
-      addMessage({ role: 'assistant', content: data.response || data.content || 'Flame response received.' });
+      addMessage({ 
+        role: 'assistant', 
+        content: data.response || data.content || 'Flame response received.',
+        id: data.assistant_message_id || undefined,
+      });
     } catch {
       addMessage({
         role: 'assistant',

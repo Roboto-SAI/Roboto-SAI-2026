@@ -606,19 +606,21 @@ async def chat_with_grok(
                 logger.warning(f"Emotion simulation (assistant) failed: {emotion_error}")
 
         # Save conversation
-        await history_store.add_message(user_message)
+        user_message_id = await history_store.add_message(user_message)
         
         assistant_message = AIMessage(
             content=response_text,
             additional_kwargs=assistant_emotion or {}
         )
-        await history_store.add_message(assistant_message)
+        assistant_message_id = await history_store.add_message(assistant_message)
 
         return {
             "success": True,
             "response": response_text,
             "reasoning_available": False,
             "response_id": f"lc-{session_id}",
+            "assistant_message_id": assistant_message_id,
+            "user_message_id": user_message_id,
             "emotion": {
                 "user": user_emotion,
                 "assistant": assistant_emotion,

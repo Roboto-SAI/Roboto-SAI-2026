@@ -86,14 +86,14 @@ class SupabaseMessageHistory(BaseChatMessageHistory):
 
         return lc_messages
 
-    async def add_message(self, message: BaseMessage) -> None:
+    async def add_message(self, message: BaseMessage) -> Optional[str]:
         role = "user" if isinstance(message, HumanMessage) else "assistant" if isinstance(message, AIMessage) else None
         if not role:
-            return
+            return None
 
         if self._supabase is None:
             _memory_store.setdefault(self._key, []).append(message)
-            return
+            return None
 
         data = {
             "user_id": self.user_id,
@@ -104,8 +104,17 @@ class SupabaseMessageHistory(BaseChatMessageHistory):
             "emotion_text": message.additional_kwargs.get("emotion_text"),
             "emotion_probabilities": json.dumps(message.additional_kwargs.get("emotion_probabilities", {})),
         }
+        # Return inserted row id if available
+        def _insert():
+            resp = self._supabase.table("messages").insert(data).execute()
+            try:
+                if resp and resp.data and len(resp.data) > 0:
+                    return str(resp.data[0].get("id"))
+            except Exception:
+                pass
+            return None
 
-        await asyncio.to_thread(lambda: self._supabase.table("messages").insert(data).execute())
+        return await asyncio.to_thread(_insert)
 
     async def clear(self) -> None:
         if self._supabase is None:

@@ -55,7 +55,7 @@ interface ChatState {
   createNewConversation: () => string;
   selectConversation: (id: string) => void;
   deleteConversation: (id: string) => void;
-  addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => string;
+  addMessage: (message: Omit<Message, 'timestamp'>) => string;
   setLoading: (loading: boolean) => void;
   toggleVentMode: () => void;
   setTheme: (theme: string) => void;
@@ -218,7 +218,9 @@ export const useChatStore = create<ChatState>()(
           
           const newMessage: Message = {
             ...message,
-            id: crypto.randomUUID(),
+            id: typeof (message as Partial<Message>).id === 'string' 
+              ? (message as Partial<Message>).id as string 
+              : crypto.randomUUID(),
             timestamp: new Date(),
             session_id: conversationId,
           };
