@@ -54,7 +54,7 @@ Implementation outline (backend)
    - `GOOGLE_CLIENT_ID`
    - `GOOGLE_CLIENT_SECRET`
    - `GOOGLE_REDIRECT_URI` (ex: `http://localhost:5000/api/auth/google/callback`)
-   - `FRONTEND_ORIGIN` (ex: `http://localhost:5173` or your preview URL)
+   - `FRONTEND_ORIGIN` (ex: `http://localhost:8080` or your preview URL)
    - `SESSION_SECRET` (used to sign cookie values if we choose signed cookies)
    - `SESSION_TTL_SECONDS` (optional)
 

@@ -15,13 +15,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare env file
+        run: |
+          if [ ! -f .env ]; then
+            cat > .env <<'EOF'
+          FRONTEND_ORIGIN=http://localhost:8080
+          SESSION_TTL_SECONDS=604800
+          EOF
+          fi
+
       - name: Build backend image
         run: |
-          docker compose -f docker-compose.yml -f .devcontainer/docker-compose.devcontainer.json --profile dev build roboto-sai-backend
+          docker compose -f docker-compose.yml --profile dev build roboto-sai-backend
 
       - name: Start backend
         run: |
-          docker compose -f docker-compose.yml -f .devcontainer/docker-compose.devcontainer.json --profile dev up -d roboto-sai-backend
+          docker compose -f docker-compose.yml --profile dev up -d roboto-sai-backend
 
       - name: Wait for health
         run: |
@@ -30,4 +39,4 @@ jobs:
       - name: Shutdown
         if: always()
         run: |
-          docker compose -f docker-compose.yml -f .devcontainer/docker-compose.devcontainer.json --profile dev down
+          docker compose -f docker-compose.yml --profile dev down
