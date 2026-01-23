@@ -39,6 +39,7 @@ Future Backend adds/
 !.github/workflows/**
 # Agent-Memory
 AI-Memory/*
+.SAI_Agents/*
 
 # Environment
 .env
