@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
+import { useAuthStore } from '@/stores/authStore';
 
 interface AuthFormProps {
   onSubmit: (data: { username: string; email: string; password: string }) => void;
@@ -17,6 +19,10 @@ interface AuthFormProps {
 }
 
 export const AuthForm = ({ onSubmit, defaultUsername = '' }: AuthFormProps) => {
+  const { toast } = useToast();
+  const { startGoogleSignIn, requestMagicLink } = useAuthStore();
+
+  const [authMode, setAuthMode] = useState<'magic' | 'demo'>('magic');
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState(defaultUsername);
   const [email, setEmail] = useState('');
@@ -87,7 +93,91 @@ export const AuthForm = ({ onSubmit, defaultUsername = '' }: AuthFormProps) => {
       </CardHeader>
 
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-4">
+          {/* Google */}
+          <Button type="button" className="w-full btn-ember" onClick={startGoogleSignIn}>
+            Continue with Google
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+
+          {/* Mode switch */}
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant={authMode === 'magic' ? 'default' : 'secondary'}
+              className="w-full"
+              onClick={() => {
+                setAuthMode('magic');
+                setErrors({});
+              }}
+            >
+              Magic link
+            </Button>
+            <Button
+              type="button"
+              variant={authMode === 'demo' ? 'default' : 'secondary'}
+              className="w-full"
+              onClick={() => {
+                setAuthMode('demo');
+                setErrors({});
+              }}
+            >
+              Demo login
+            </Button>
+          </div>
+
+          {authMode === 'magic' ? (
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const clean = email.trim();
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
+                  toast({
+                    title: 'Invalid email',
+                    description: 'Please enter a valid email to receive a magic link.',
+                    variant: 'destructive',
+                  });
+                  return;
+                }
+                try {
+                  await requestMagicLink(clean);
+                  toast({
+                    title: 'Magic link sent',
+                    description: 'Check your email (in dev, the link may appear in backend logs).',
+                  });
+                } catch {
+                  toast({
+                    title: 'Request failed',
+                    description: 'Could not send magic link. Try again.',
+                    variant: 'destructive',
+                  });
+                }
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-2">
+                <Label htmlFor="magicEmail" className="text-sm text-foreground/80">
+                  Email
+                </Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="magicEmail"
+                    type="email"
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-10 bg-background/50 border-border/50 focus:border-fire/50"
+                  />
+                </div>
+              </div>
+
+              <Button type="submit" className="w-full">
+                Send magic link
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
           <AnimatePresence mode="wait">
             <motion.div
               key={mode}
@@ -235,7 +325,9 @@ export const AuthForm = ({ onSubmit, defaultUsername = '' }: AuthFormProps) => {
                 : 'Already have an account? Sign in'}
             </button>
           </div>
-        </form>
+            </form>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

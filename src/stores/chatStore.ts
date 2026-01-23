@@ -212,9 +212,10 @@ export const useChatStore = create<ChatState>()(
       loadUserHistory: async (userId: string) => {
         try {
           set({ conversations: [], currentConversationId: null, userId });
-          const apiBaseUrl = import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || '';
-          const url = `${apiBaseUrl}/api/chat/history?user_id=${encodeURIComponent(userId)}&limit=200`;
-          const res = await fetch(url);
+          const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
+          const apiBaseUrl = envUrl.replace(/\/+$/, '').replace(/\/api$/, '');
+          const url = `${apiBaseUrl}/api/chat/history?limit=200`;
+          const res = await fetch(url, { credentials: 'include' });
           if (!res.ok) throw new Error('Failed to load history');
           const data = await res.json();
           const messages = data.messages || [];

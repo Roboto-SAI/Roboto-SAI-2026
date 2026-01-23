@@ -46,6 +46,12 @@ services:
       - PYTHON_ENV=production
       - XAI_API_KEY=${XAI_API_KEY}
       - ROBO_EMOTION_STATE_PATH=/app/backend/data/emotion_state.json
+      # Auth (Google + Magic Link)
+      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - SESSION_TTL_SECONDS=${SESSION_TTL_SECONDS}
     env_file:
       - .env
     volumes:

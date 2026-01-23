@@ -52,7 +52,7 @@ const getApiBaseUrl = (): string => {
 
 const Chat = () => {
   const navigate = useNavigate();
-  const { userId, isLoggedIn } = useAuthStore();
+  const { userId, isLoggedIn, refreshSession } = useAuthStore();
   const { 
     getMessages, 
     isLoading, 
@@ -83,15 +83,21 @@ const Chat = () => {
   }, [messages, isLoading]);
 
   useEffect(() => {
-    if (!isLoggedIn) {
-      navigate('/');
-      return;
-    }
+    (async () => {
+      const ok = await refreshSession();
+      if (!ok) {
+        navigate('/');
+        return;
+      }
+    })();
+  }, [refreshSession, navigate]);
 
+  useEffect(() => {
+    if (!isLoggedIn) return;
     if (userId && userId !== storeUserId) {
       loadUserHistory(userId);
     }
-  }, [isLoggedIn, userId, storeUserId, loadUserHistory, navigate]);
+  }, [isLoggedIn, userId, storeUserId, loadUserHistory]);
 
   const handleSend = async (content: string, attachments?: FileAttachment[]) => {
     if (!isLoggedIn || !userId) {
@@ -114,10 +120,10 @@ const Chat = () => {
       const response = await fetch(chatUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           message: content,
           context,
-          user_id: userId,
           session_id: sessionId,
         }),
       });

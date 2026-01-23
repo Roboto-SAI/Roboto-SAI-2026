@@ -10,16 +10,20 @@ import os
 import logging
 import asyncio
 import json
+import secrets
+import hashlib
+from urllib.parse import urlencode
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+import httpx
 import websockets
 
 # LangChain imports
@@ -29,7 +33,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 # Import Roboto SAI SDK
 from roboto_sai_sdk import RobotoSAIClient, get_xai_grok
 from db import get_session, init_db
-from models import Message
+from models import Message, User, AuthSession, MagicLinkToken
 from advanced_emotion_simulator import AdvancedEmotionSimulator
 from langchain_memory import SQLMessageHistory
 from grok_llm import GrokLLM
@@ -103,18 +107,302 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configure CORS for frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+def _get_frontend_origins() -> list[str]:
+    env = (os.getenv("FRONTEND_ORIGIN") or "").strip()
+    env_origins = [o.strip() for o in env.split(",") if o.strip()]
+    defaults = [
         "http://localhost:5173",
         "http://localhost:3000",
         "http://localhost:8080",
-    ],
+    ]
+    # preserve ordering while removing duplicates
+    out: list[str] = []
+    for origin in [*env_origins, *defaults]:
+        if origin and origin not in out:
+            out.append(origin)
+    return out
+
+
+# Configure CORS for frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_get_frontend_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+SESSION_COOKIE_NAME = "roboto_session"
+OAUTH_STATE_COOKIE_NAME = "roboto_oauth_state"
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _session_ttl() -> timedelta:
+    try:
+        seconds = int(os.getenv("SESSION_TTL_SECONDS", "604800"))  # 7 days
+        return timedelta(seconds=max(60, seconds))
+    except Exception:
+        return timedelta(days=7)
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+async def _create_session_cookie(response: RedirectResponse, session: AsyncSession, user_id: str) -> None:
+    sess_id = secrets.token_urlsafe(32)
+    expires_at = _utcnow() + _session_ttl()
+    session.add(AuthSession(id=sess_id, user_id=user_id, expires_at=expires_at))
+    await session.commit()
+
+    # Note: In production behind HTTPS, set COOKIE_SECURE=true
+    secure = (os.getenv("COOKIE_SECURE", "").lower() == "true")
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=sess_id,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        max_age=int(_session_ttl().total_seconds()),
+        path="/",
+    )
+
+
+async def get_current_user(
+    request,  # FastAPI Request type avoided to keep imports minimal
+    session: AsyncSession = Depends(get_session),
+) -> User:
+    sess_id = request.cookies.get(SESSION_COOKIE_NAME)
+    if not sess_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    now = _utcnow()
+    sess_res = await session.execute(
+        select(AuthSession).where(AuthSession.id == sess_id).where(AuthSession.expires_at > now)
+    )
+    sess = sess_res.scalar_one_or_none()
+    if not sess:
+        raise HTTPException(status_code=401, detail="Session expired")
+
+    user_res = await session.execute(select(User).where(User.id == sess.user_id))
+    user = user_res.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
+class MagicRequest(BaseModel):
+    email: str
+
+
+@app.get("/api/auth/me", tags=["Auth"])
+async def auth_me(user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    return {
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "display_name": user.display_name,
+            "avatar_url": user.avatar_url,
+            "provider": user.provider,
+        }
+    }
+
+
+@app.post("/api/auth/logout", tags=["Auth"])
+async def auth_logout(request, session: AsyncSession = Depends(get_session)) -> JSONResponse:
+    sess_id = request.cookies.get(SESSION_COOKIE_NAME)
+    if sess_id:
+        sess_res = await session.execute(select(AuthSession).where(AuthSession.id == sess_id))
+        sess = sess_res.scalar_one_or_none()
+        if sess:
+            await session.delete(sess)
+            await session.commit()
+
+    resp = JSONResponse({"success": True})
+    resp.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    return resp
+
+
+@app.get("/api/auth/google/start", tags=["Auth"])
+async def auth_google_start(request) -> RedirectResponse:
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
+    if not client_id or not redirect_uri:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured")
+
+    state = secrets.token_urlsafe(16)
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "online",
+        "prompt": "select_account",
+        "state": state,
+    }
+    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
+    resp = RedirectResponse(url=url, status_code=302)
+    resp.set_cookie(
+        key=OAUTH_STATE_COOKIE_NAME,
+        value=state,
+        httponly=True,
+        secure=(os.getenv("COOKIE_SECURE", "").lower() == "true"),
+        samesite="lax",
+        max_age=300,
+        path="/",
+    )
+    return resp
+
+
+@app.get("/api/auth/google/callback", tags=["Auth"])
+async def auth_google_callback(
+    request,
+    code: str,
+    state: str,
+    session: AsyncSession = Depends(get_session),
+) -> RedirectResponse:
+    expected_state = request.cookies.get(OAUTH_STATE_COOKIE_NAME)
+    if not expected_state or state != expected_state:
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
+    if not client_id or not client_secret or not redirect_uri:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured")
+
+    token_url = "https://oauth2.googleapis.com/token"
+    async with httpx.AsyncClient(timeout=15) as client:
+        token_res = await client.post(
+            token_url,
+            data={
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        if token_res.status_code >= 400:
+            raise HTTPException(status_code=400, detail=f"Google token exchange failed ({token_res.status_code})")
+        tokens = token_res.json()
+        access_token = tokens.get("access_token")
+        if not access_token:
+            raise HTTPException(status_code=400, detail="Missing access_token")
+
+        userinfo_res = await client.get(
+            "https://openidconnect.googleapis.com/v1/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if userinfo_res.status_code >= 400:
+            raise HTTPException(status_code=400, detail="Failed to fetch Google userinfo")
+        info = userinfo_res.json()
+
+    email = info.get("email")
+    sub = info.get("sub")
+    name = info.get("name")
+    picture = info.get("picture")
+    if not email or not sub:
+        raise HTTPException(status_code=400, detail="Google userinfo incomplete")
+
+    # Upsert user
+    existing_res = await session.execute(
+        select(User).where((User.provider == "google") & (User.provider_sub == sub))
+    )
+    user = existing_res.scalar_one_or_none()
+    if not user:
+        by_email_res = await session.execute(select(User).where(User.email == email))
+        user = by_email_res.scalar_one_or_none()
+
+    if user:
+        user.email = email
+        user.display_name = name or user.display_name
+        user.avatar_url = picture or user.avatar_url
+        user.provider = "google"
+        user.provider_sub = sub
+    else:
+        user = User(
+            id=secrets.token_urlsafe(16)[:64],
+            email=email,
+            display_name=name,
+            avatar_url=picture,
+            provider="google",
+            provider_sub=sub,
+        )
+        session.add(user)
+    await session.commit()
+
+    frontend_origin = (os.getenv("FRONTEND_ORIGIN") or "http://localhost:5173").split(",")[0].strip()
+    redirect_to = f"{frontend_origin}/chat"
+    resp = RedirectResponse(url=redirect_to, status_code=302)
+    resp.delete_cookie(OAUTH_STATE_COOKIE_NAME, path="/")
+    await _create_session_cookie(resp, session, user.id)
+    return resp
+
+
+@app.post("/api/auth/magic/request", tags=["Auth"])
+async def auth_magic_request(req: MagicRequest, session: AsyncSession = Depends(get_session)) -> Dict[str, Any]:
+    email = (req.email or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Invalid email")
+
+    token = secrets.token_urlsafe(32)
+    token_hash = _hash_token(token)
+    expires_at = _utcnow() + timedelta(minutes=15)
+    session.add(MagicLinkToken(token_hash=token_hash, email=email, expires_at=expires_at))
+    await session.commit()
+
+    base_url = os.getenv("GOOGLE_REDIRECT_URI")
+    # If GOOGLE_REDIRECT_URI is set, its host is the backend public URL; otherwise assume local.
+    backend_base = "http://localhost:5000"
+    if base_url and "/api/auth/google/callback" in base_url:
+        backend_base = base_url.split("/api/auth/google/callback")[0]
+
+    verify_url = f"{backend_base}/api/auth/magic/verify?{urlencode({'token': token})}"
+
+    # Email sending is not wired yet. For now, log to server.
+    logger.info(f"[MAGIC LINK] {email} -> {verify_url}")
+
+    return {"success": True}
+
+
+@app.get("/api/auth/magic/verify", tags=["Auth"])
+async def auth_magic_verify(token: str, session: AsyncSession = Depends(get_session)) -> RedirectResponse:
+    token_hash = _hash_token(token)
+    now = _utcnow()
+    res = await session.execute(select(MagicLinkToken).where(MagicLinkToken.token_hash == token_hash))
+    row = res.scalar_one_or_none()
+    if not row or row.used_at is not None or row.expires_at <= now:
+        raise HTTPException(status_code=400, detail="Invalid or expired magic link")
+
+    email = row.email
+    user_res = await session.execute(select(User).where(User.email == email))
+    user = user_res.scalar_one_or_none()
+    if not user:
+        user = User(
+            id=secrets.token_urlsafe(16)[:64],
+            email=email,
+            display_name=email.split("@")[0],
+            avatar_url=None,
+            provider="magic",
+            provider_sub=None,
+        )
+        session.add(user)
+
+    row.user_id = user.id
+    row.used_at = now
+    await session.commit()
+
+    frontend_origin = (os.getenv("FRONTEND_ORIGIN") or "http://localhost:5173").split(",")[0].strip()
+    redirect_to = f"{frontend_origin}/chat"
+    resp = RedirectResponse(url=redirect_to, status_code=302)
+    await _create_session_cookie(resp, session, user.id)
+    return resp
 
 # Pydantic Models
 class ChatMessage(BaseModel):
@@ -289,7 +577,8 @@ async def get_emotion_stats() -> Dict[str, Any]:
 @app.post("/api/chat", tags=["Chat"])
 async def chat_with_grok(
     request: ChatMessage,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Chat with xAI Grok using Roboto SAI context with LangChain memory
@@ -332,8 +621,8 @@ async def chat_with_grok(
             except Exception as emotion_error:
                 logger.warning(f"Emotion simulation (user) failed: {emotion_error}")
 
-        # Load conversation history
-        history_store = SQLMessageHistory(session_id=session_id, user_id=request.user_id)
+        # Load conversation history (user_id derived from authenticated session)
+        history_store = SQLMessageHistory(session_id=session_id, user_id=user.id)
         history_messages = await history_store._get_messages_async()
         
         # Prepare user message with emotion
@@ -397,15 +686,14 @@ async def chat_with_grok(
 
 @app.get("/api/chat/history", tags=["Chat"])
 async def get_chat_history(
-    user_id: Optional[str] = None,
     session_id: Optional[str] = None,
     limit: int = 50,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Retrieve recent chat history."""
     stmt = select(Message).order_by(Message.created_at.desc()).limit(limit)
-    if user_id:
-        stmt = stmt.where(Message.user_id == user_id)
+    stmt = stmt.where(Message.user_id == user.id)
     if session_id:
         stmt = stmt.where(Message.session_id == session_id)
 
