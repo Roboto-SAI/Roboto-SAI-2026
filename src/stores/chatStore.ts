@@ -161,7 +161,7 @@ export const useChatStore = create<ChatState>()(
             return timeA - timeB;
           });
 
-        const maxMessages = 20; // Keep payload small and focused
+        const maxMessages = 50; // Reduced for proxy
         const recent = allMessages.slice(-maxMessages);
         const filtered = recent.filter(message => {
           if (message.role !== 'assistant') return true;
@@ -171,10 +171,10 @@ export const useChatStore = create<ChatState>()(
         let context = filtered
           .map(message => {
             const safeContent = typeof message.content === 'string' ? message.content : '';
-            return `${message.role}: ${safeContent.substring(0, 300)}`;
-          }) // Truncate per message
+            return `${message.role}: ${safeContent.substring(0, 500)}`;
+          }) // Trunc per msg
           .join('\n');
-        return context.length > 4000 ? context.substring(0, 4000) + '\n... (truncated)' : context;
+        return context.length > 10000 ? context.substring(0, 10000) + '\n... (truncated)' : context;
       },
       
       createNewConversation: () => {
