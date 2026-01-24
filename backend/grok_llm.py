@@ -95,14 +95,12 @@ class GrokLLM(LLM):
             user_message = str(prompt)
             context = kwargs.get("context", "")
 
-        # Use Responses API with previous_response_id for chaining
-        result = self.client.chat(
-            message=user_message,
-            emotion=emotion,
-            user_name=user_name,
+        # Use SDK roboto_grok_chat (wraps Responses API)
+        roboto_context = f"Emotion: {emotion}. User: {user_name}. History: {context}."
+        result = self.client.roboto_grok_chat(
+            user_message=user_message,
+            roboto_context=roboto_context,
             previous_response_id=kwargs.get("previous_response_id"),
-            use_encrypted_content=self.use_encrypted_content,
-            store_messages=self.store_messages
         )
 
         logger.info(f"Grok response ID: {result.get('response_id')}")

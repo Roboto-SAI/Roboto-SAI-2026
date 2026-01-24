@@ -149,16 +149,32 @@ export const useChatStore = create<ChatState>()(
       
       getAllConversationsContext: () => {
         const state = get();
-        const allMessages = state.conversations
-          .flatMap(conv => conv.messages)
-          .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+        const allMessages = (state.conversations ?? [])
+          .flatMap(conv => Array.isArray(conv.messages) ? conv.messages : [])
+          .sort((a, b) => {
+            const timeA = a.timestamp instanceof Date
+              ? a.timestamp.getTime()
+              : new Date(a.timestamp ?? 0).getTime();
+            const timeB = b.timestamp instanceof Date
+              ? b.timestamp.getTime()
+              : new Date(b.timestamp ?? 0).getTime();
+            return timeA - timeB;
+          });
 
-        const maxMessages = 50; // Reduced for proxy
+        const maxMessages = 20; // Keep payload small and focused
         const recent = allMessages.slice(-maxMessages);
-        let context = recent
-          .map(message => `${message.role}: ${message.content.substring(0, 500)}`) // Trunc per msg
+        const filtered = recent.filter(message => {
+          if (message.role !== 'assistant') return true;
+          const content = typeof message.content === 'string' ? message.content : '';
+          return !content.startsWith('⚠️ **Connection to the flame matrix interrupted.**');
+        });
+        let context = filtered
+          .map(message => {
+            const safeContent = typeof message.content === 'string' ? message.content : '';
+            return `${message.role}: ${safeContent.substring(0, 300)}`;
+          }) // Truncate per message
           .join('\n');
-        return context.length > 10000 ? context.substring(0, 10000) + '\n... (truncated)' : context;
+        return context.length > 4000 ? context.substring(0, 4000) + '\n... (truncated)' : context;
       },
       
       createNewConversation: () => {
@@ -218,8 +234,8 @@ export const useChatStore = create<ChatState>()(
           
           const newMessage: Message = {
             ...message,
-            id: typeof (message as Partial<Message>).id === 'string' 
-              ? (message as Partial<Message>).id as string 
+            id: typeof message.id === 'string' 
+              ? message.id 
               : crypto.randomUUID(),
             timestamp: new Date(),
             session_id: conversationId,
@@ -279,7 +295,7 @@ export const useChatStore = create<ChatState>()(
         try {
           set({ conversations: [], currentConversationId: null, userId });
           const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
-          const fallbackBase = typeof window !== 'undefined' ? window.location.origin : '';
+          const fallbackBase = globalThis.window?.location.origin ?? '';
           const apiBaseUrl = (envUrl || fallbackBase).replace(/\/+$/, '').replace(/\/api$/, '');
           const url = `${apiBaseUrl}/api/chat/history?limit=200`;
           const res = await fetch(url, { credentials: 'include' });
@@ -291,16 +307,17 @@ export const useChatStore = create<ChatState>()(
           const groups = new Map<string, Conversation>();
           messages.forEach((msg: Message & { created_at?: string }) => {
             const sessId = msg.session_id || 'default';
-            if (!groups.has(sessId)) {
-              groups.set(sessId, {
+            let conv = groups.get(sessId);
+            if (!conv) {
+              conv = {
                 id: sessId,
                 title: 'Chat',
                 messages: [],
                 createdAt: new Date(),
                 updatedAt: new Date(),
-              });
+              };
+              groups.set(sessId, conv);
             }
-            const conv = groups.get(sessId)!;
             const createdAt = msg.created_at ? new Date(msg.created_at) : new Date();
             const probabilities = typeof msg.emotion_probabilities === 'string'
               ? (() => {
@@ -361,7 +378,7 @@ export const useChatStore = create<ChatState>()(
       version: 2,
       migrate: (persistedState: unknown) => {
         const envelope = isRecord(persistedState) ? persistedState : null;
-        const rawState = envelope && 'state' in envelope ? (envelope as Record<string, unknown>).state : persistedState;
+        const rawState = envelope && 'state' in envelope ? envelope.state : persistedState;
 
         const userId = isRecord(rawState) && typeof rawState.userId === 'string' ? rawState.userId : null;
         const currentTheme = isRecord(rawState) && typeof rawState.currentTheme === 'string'
