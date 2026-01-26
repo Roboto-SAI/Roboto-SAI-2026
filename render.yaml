@@ -10,11 +10,8 @@ services:
     branch: main
     rootDir: backend
     buildCommand: |
-      git submodule update --init --recursive
       python -m pip install --upgrade pip
       pip install --no-cache-dir -r requirements.txt
-      # If SDK is provided as an editable package in-repo, install it (no-op if not present)
-      pip install --no-cache-dir -e ../sdk/roboto-sai-sdk || true
     startCommand: |
       uvicorn main:app --host 0.0.0.0 --port $PORT
     disk:
@@ -41,8 +38,7 @@ services:
       - key: ROBO_EMOTION_STATE_PATH
         value: "/var/data/emotion_state.json"
     healthCheckPath: /api/health
-    healthCheckStartupFailureThreshold: 10
-    autoDeployTrigger: 'on'
+    autoDeployTrigger: commit
 
   - type: web
     name: roboto-sai-frontend
@@ -58,7 +54,7 @@ services:
     routes:
       - path: "/"
         destination: "/index.html"
-    autoDeployTrigger: 'on'
+    autoDeployTrigger: commit
 
   - type: redis
     name: roboto-sai-redis
