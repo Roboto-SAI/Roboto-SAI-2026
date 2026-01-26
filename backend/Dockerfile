@@ -32,8 +32,10 @@ RUN if [ -f /app/sdk/roboto-sai-sdk/pyproject.toml ] || [ -f /app/sdk/roboto-sai
             exit 1; \
         fi
 
-# Copy backend code
+# Copy backend code and entrypoint script
 COPY backend/ .
+COPY backend/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 WORKDIR /app/backend
 
@@ -44,5 +46,5 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health').read()"
 
-# Run FastAPI with uvicorn (default port 8000 if PORT not set)
-CMD python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Use entrypoint script for better error handling and logging
+ENTRYPOINT ["/app/entrypoint.sh"]
