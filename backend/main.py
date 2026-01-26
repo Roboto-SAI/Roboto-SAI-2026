@@ -116,9 +116,6 @@ print("DEBUG: get_supabase_client imported")
 from db import init_db
 print("DEBUG: init_db imported")
 
-from real_time_data_system import run_supabase_async
-print("DEBUG: run_supabase_async imported")
-
 print("DEBUG: All imports completed, starting FastAPI app creation")
 
 # Global client instance
