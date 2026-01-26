@@ -11,9 +11,16 @@ from langchain_core.outputs import Generation, LLMResult
 from langchain_core.messages import BaseMessage, HumanMessage
 import logging
 
-from roboto_sai_sdk import get_xai_grok
-
 logger = logging.getLogger(__name__)
+
+# Import Roboto SAI SDK (optional)
+try:
+    from roboto_sai_sdk import get_xai_grok
+    HAS_SDK = True
+except ImportError:
+    logger.warning("roboto_sai_sdk not available in grok_llm")
+    HAS_SDK = False
+    get_xai_grok = None
 
 
 class GrokLLM(LLM):
