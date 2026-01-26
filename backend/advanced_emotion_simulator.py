@@ -35,6 +35,12 @@ try:
 except ImportError:
     VOICE_AVAILABLE = False
 
+try:
+    from personality import RobotoAi5Personality
+    PERSONALITY_AVAILABLE = True
+except ImportError:
+    PERSONALITY_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 # Constants
@@ -121,6 +127,7 @@ class AdvancedEmotionSimulator:
         # Initialize optional systems
         self.quantum_opt: Optional[Any] = self._init_quantum_system()
         self.cultural_system: Optional[Any] = self._init_cultural_system()
+        self.personality: Optional[Any] = None
 
     def _init_quantum_system(self) -> Optional[Any]:
         """Initialize quantum optimization system if available."""
@@ -276,6 +283,17 @@ class AdvancedEmotionSimulator:
             # Update state
             self.current_emotion = best_emotion
             self.emotion_history.append(best_emotion)
+
+            # Enhance with personality if enabled
+            if self.personality:
+                try:
+                    poetic_enhancement = self.personality.query_response(event)
+                    # Extract just the response part
+                    if "Response:" in poetic_enhancement:
+                        poetic_part = poetic_enhancement.split("Response:")[1].strip()
+                        selected_variation += f" - {poetic_part}"
+                except Exception as e:
+                    logger.warning(f"Personality enhancement failed: {e}")
 
             logger.info(f"🎭 Advanced Emotion Simulation: {best_emotion} -> {selected_variation}")
 
@@ -558,6 +576,44 @@ class AdvancedEmotionSimulator:
             logger.warning(f"Voice chain error: {e} - Using default TTS.")
             return {"pitch": 1.0, "rate": 1.0}
 
+    def enable_personality(self, mode: str = "roboto_ai5", **kwargs) -> bool:
+        """
+        Enable personality mode for enhanced emotional responses
+
+        Args:
+            mode: Personality mode to enable
+            **kwargs: Additional arguments for personality initialization
+
+        Returns:
+            Success status
+        """
+        if not PERSONALITY_AVAILABLE:
+            logger.warning("Personality system not available")
+            return False
+
+        try:
+            if mode == "roboto_ai5":
+                self.personality = RobotoAi5Personality(**kwargs)
+                logger.info("🎭 Roboto Ai5 personality enabled in emotion simulator")
+                return True
+            else:
+                logger.warning(f"Unknown personality mode: {mode}")
+                return False
+        except Exception as e:
+            logger.error(f"Failed to enable personality: {e}")
+            return False
+
+    def disable_personality(self) -> bool:
+        """
+        Disable personality mode
+
+        Returns:
+            Success status
+        """
+        self.personality = None
+        logger.info("🎭 Personality disabled in emotion simulator")
+        return True
+
     def get_emotional_stats(self) -> Dict[str, Any]:
         """Return summary statistics about recent emotions.
 
@@ -718,6 +774,14 @@ def integrate_advanced_emotion_simulator(roboto_instance: Any) -> Optional[Advan
                 logger.info("🌅 Cultural overrides loaded for Mayan óol resonance.")
             else:
                 logger.warning("Failed to load Mayan cultural overrides")
+
+        # Experimental features
+        if os.environ.get("ROBO_EXPERIMENTAL_PERSONALITY", "false").lower() == "true":
+            success = simulator.enable_personality("roboto_ai5")
+            if success:
+                logger.info("🧪 Experimental personality feature enabled in backend")
+            else:
+                logger.warning("Failed to enable experimental personality in backend")
 
         # Register atexit save to persist keyword weights and history
         def _save_on_exit():

@@ -61,7 +61,7 @@ const Index = () => {
             </h1>
             
             <h2 className="font-display text-xl sm:text-2xl md:text-3xl text-gold-glow mb-4">
-              Fuego Eterno de Roberto Villarreal Martinez
+              Fuego Eterno
             </h2>
 
             <motion.p initial={{
@@ -70,8 +70,7 @@ const Index = () => {
             opacity: 1
           }} transition={{
             delay: 0.5
-          }} className="text-muted-foreground text-lg md:text-xl max-w-2xl mx-auto mb-12">© 2026 Roberto Villarreal Martinez – Powered by xAI Grok</motion.p>
-
+          }} className="text-muted-foreground text-lg md:text-xl max-w-2xl mx-auto mb-12">© 2026 Roboto SAI</motion.p>
             {/* CTA Button */}
             <motion.div initial={{
             opacity: 0,
@@ -171,12 +170,12 @@ const Index = () => {
               <span className="text-sm">View the Legacy</span>
             </Link>
             <p className="text-fire font-display text-lg animate-pulse">
-              Roberto Villarreal Martinez never dies.
+              Roboto SAI Fuego Edition.
             </p>
             <p className="text-xs text-muted-foreground/60">
-              Created by Roberto Villarreal Martinez for Roboto SAI (powered by Grok)
+              © 2026 Roboto SAI (powered by xAI Grok) 
             </p>
-          </motion.div>
+          </motion.div> 
         </div>
       </footer>
     </div>;

@@ -97,6 +97,12 @@ class GrokLLM(LLM):
 
         # Use SDK roboto_grok_chat (wraps Responses API)
         roboto_context = f"Emotion: {emotion}. User: {user_name}. History: {context}."
+        
+        # Truncate extremely large contexts to prevent API limits (Grok 4.1: 1M+ tokens ~4M chars, but safe cap at 200k chars)
+        if len(roboto_context) > 200000:
+            logger.warning(f"Context too large ({len(roboto_context)} chars), truncating to 200k")
+            roboto_context = roboto_context[:200000] + "... (truncated)"
+        
         result = self.client.roboto_grok_chat(
             user_message=user_message,
             roboto_context=roboto_context,
@@ -112,7 +118,7 @@ class GrokLLM(LLM):
         stop: Optional[List[str]] = None,
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
-    ) -> str:
+    ) -> str:  # pylint: disable=too-many-branches
         """
         Async call to Grok for better performance.
         """
@@ -128,7 +134,6 @@ class GrokLLM(LLM):
         elif isinstance(prompt, list):
             # Extract last human message as the new input
             messages = prompt
-            last_human = None
             context_parts = []
             for msg in messages[:-1]:  # All except last
                 role = "User" if isinstance(msg, HumanMessage) else "Assistant"

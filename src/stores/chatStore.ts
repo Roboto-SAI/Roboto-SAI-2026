@@ -161,7 +161,7 @@ export const useChatStore = create<ChatState>()(
             return timeA - timeB;
           });
 
-        const maxMessages = 50; // Reduced for proxy
+        const maxMessages = 50; // Increased for more history
         const recent = allMessages.slice(-maxMessages);
         const filtered = recent.filter(message => {
           if (message.role !== 'assistant') return true;
@@ -171,10 +171,10 @@ export const useChatStore = create<ChatState>()(
         let context = filtered
           .map(message => {
             const safeContent = typeof message.content === 'string' ? message.content : '';
-            return `${message.role}: ${safeContent.substring(0, 500)}`;
-          }) // Trunc per msg
+            return `${message.role}: ${safeContent.substring(0, 500)}`; // Increased truncation per message
+          })
           .join('\n');
-        return context.length > 10000 ? context.substring(0, 10000) + '\n... (truncated)' : context;
+        return context.length > 100000 ? context.substring(0, 100000) + '\n... (truncated)' : context; // Increased total cap to 100k chars
       },
       
       createNewConversation: () => {

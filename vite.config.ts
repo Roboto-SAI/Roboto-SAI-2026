@@ -15,6 +15,7 @@ export default defineConfig(({ mode }) => ({
         // Allow overriding backend URL when running inside Docker
         target: process.env.VITE_API_URL || process.env.API_PROXY_TARGET || "http://localhost:5000",
         changeOrigin: true,
+        ws: true,
         configure: (proxy, options) => {
           // Safe POST body forward v4: http-proxy event (Vite docs)
           proxy.on('proxyReq', (proxyReq, req, res) => {

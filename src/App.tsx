@@ -16,6 +16,7 @@ import Legacy from "./pages/Legacy";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import KnowledgeBase from "./pages/KnowledgeBase";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -45,6 +46,7 @@ const App = () => {
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/knowledge" element={<KnowledgeBase />} />
             <Route path="/chat" element={
               <RequireAuth>
                 <Chat />
