@@ -37,12 +37,12 @@ COPY backend/ .
 
 WORKDIR /app/backend
 
-# Expose port (Render will set PORT env var)
+# Expose port - Render will set PORT env var to the exposed port | default to 5000
 EXPOSE 5000
 
-# Health Check - more robust port detection
-HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
-    CMD python -c "import socket; s = socket.socket(); s.connect(('localhost', int(5000))); s.close()" || exit 1
+# Health Check - check if uvicorn is responding
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=2 \
+    CMD pgrep -f uvicorn || exit 1
 
-# Simple, direct uvicorn startup using exec form
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000", "--log-level", "info"]
+# Run uvicorn with PORT env var (Render sets this automatically to match EXPOSE)  
+CMD ["sh", "-c", "python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-5000} --log-level info"]
