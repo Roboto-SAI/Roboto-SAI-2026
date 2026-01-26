@@ -27,7 +27,7 @@ const isGitHubPagesHost = () => {
   return globalThis.window.location.hostname.endsWith("github.io");
 };
 
-const Router = HashRouter;
+// Force rebuild
 
 const App = () => {
   const refreshSession = useAuthStore((state) => state.refreshSession);
