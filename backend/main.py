@@ -248,12 +248,10 @@ def _frontend_url(path: str) -> str:
 
 
 # Configure CORS for frontend
-print("DEBUG: FRONTEND_ORIGIN env =", os.getenv("FRONTEND_ORIGIN"))
-print("DEBUG: allow_origins =", _get_frontend_origins())
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=["https://roboto-sai-frontend.onrender.com", "http://localhost:5173"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
