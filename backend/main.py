@@ -36,6 +36,12 @@ import uuid
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
 from langchain_core.messages import HumanMessage, AIMessage
 
+from dotenv import load_dotenv
+import os
+
+# Load local .env when running outside Docker
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
+
 # Import Roboto SAI SDK (optional) - updated for proper package structure
 try:
     from roboto_sai_sdk import RobotoSAIClient, get_xai_grok
@@ -45,15 +51,6 @@ except ImportError:
     HAS_SDK = False
     RobotoSAIClient = None
     get_xai_grok = None
-
-from db import init_db, get_supabase_client
-# from models import Message  # Deprecated post-Supabase
-from advanced_emotion_simulator import AdvancedEmotionSimulator
-from langchain_memory import SupabaseMessageHistory
-from grok_llm import GrokLLM
-
-# Load local .env when running outside Docker
-load_dotenv()
 
 # Global client instance
 roboto_client: Optional[Any] = None  # Optional[RobotoSAIClient]
@@ -492,6 +489,11 @@ async def get_status() -> Dict[str, Any]:
         "sdk_version": "0.1.0",
         "hyperspeed_evolution": True
     }
+
+@app.get("/health", tags=["Health"])
+async def simple_health_check() -> Dict[str, str]:
+    """Simple health check for Render"""
+    return {"status": "healthy", "service": "roboto-sai-2026"}
 
 @app.get("/api/health", tags=["Health"])
 async def health_check() -> Dict[str, str]:

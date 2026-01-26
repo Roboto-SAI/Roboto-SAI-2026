@@ -31,7 +31,9 @@ services:
         value: "production"
       - key: ROBO_EMOTION_STATE_PATH
         value: "/var/data/emotion_state.json"
-    healthCheckPath: /api/health
+      - key: PYTHONPATH
+        value: "/app/backend"
+    healthCheckPath: /health
     autoDeployTrigger: commit
 
   - type: web
