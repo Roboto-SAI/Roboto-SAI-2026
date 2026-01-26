@@ -17,6 +17,10 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 
+# Configure logging EARLY
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -47,10 +51,6 @@ from db import init_db, get_supabase_client
 from advanced_emotion_simulator import AdvancedEmotionSimulator
 from langchain_memory import SupabaseMessageHistory
 from grok_llm import GrokLLM
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Load local .env when running outside Docker
 load_dotenv()
