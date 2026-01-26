@@ -250,7 +250,7 @@ def _frontend_url(path: str) -> str:
 # Configure CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://roboto-sai-frontend.onrender.com", "http://localhost:5173"],
+    allow_origins=_get_frontend_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -293,6 +293,19 @@ def _cookie_samesite() -> str:
     if raw not in {"lax", "strict", "none"}:
         return "lax"
     return raw
+
+
+def _cookie_domain(request: Request) -> Optional[str]:
+    """Return cookie domain based on environment."""
+    # For production (Render), use .onrender.com
+    if request.url.hostname and "onrender.com" in request.url.hostname:
+        return ".onrender.com"
+    # For localhost, return None (browser uses current domain)
+    if request.url.hostname in ("localhost", "127.0.0.1"):
+        return None
+    # For other deployments, can add custom logic
+    env_domain = os.getenv("COOKIE_DOMAIN")
+    return env_domain if env_domain else None
 
 
 def _require_supabase():
@@ -366,7 +379,7 @@ async def auth_logout(request: Request) -> JSONResponse:
             await run_supabase_async(lambda: supabase.table('auth_sessions').delete().eq('id', sess_id).execute())
 
     resp = JSONResponse({"success": True})
-    resp.delete_cookie(SESSION_COOKIE_NAME, path="/", domain=".onrender.com")
+    resp.delete_cookie(SESSION_COOKIE_NAME, path="/", domain=_cookie_domain(request))
     return resp
 
 
@@ -408,7 +421,7 @@ async def auth_register(req: RegisterRequest, request: Request) -> JSONResponse:
             samesite=_cookie_samesite(),
             max_age=int(_session_ttl().total_seconds()),
             path="/",
-            domain=".onrender.com",
+            domain=_cookie_domain(request),
         )
         return resp
     except Exception as e:
@@ -453,7 +466,7 @@ async def auth_login(req: LoginRequest, request: Request) -> JSONResponse:
             samesite=_cookie_samesite(),
             max_age=int(_session_ttl().total_seconds()),
             path="/",
-            domain=".onrender.com",
+            domain=_cookie_domain(request),
         )
         return resp
     except Exception as e:
