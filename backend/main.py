@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 
 # Configure logging EARLY
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Depends, Request
@@ -128,12 +128,29 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Roboto SAI 2026 Backend Shutting Down...")
 
 # Initialize FastAPI app
-app = FastAPI(
-    title="Roboto SAI 2026 API",
-    description="🚀 Quantum-Entangled AI Backend for RVM Empire",
-    version="0.1.0",
-    lifespan=lifespan
-)
+try:
+    app = FastAPI(
+        title="Roboto SAI 2026 API",
+        description="🚀 Quantum-Entangled AI Backend for RVM Empire",
+        version="0.1.0",
+        lifespan=lifespan
+    )
+    logger.debug("FastAPI app instance created successfully")
+except Exception as e:
+    logger.exception(f"App creation failed: {e}")
+    raise
+
+@app.on_event("startup")
+async def startup_debug():
+    logger.debug("Startup event triggered - beginning initialization")
+    try:
+        logger.debug("Startup logic will be handled by lifespan context manager")
+        logger.debug("Startup event completed successfully")
+    except Exception as e:
+        logger.exception(f"Startup failure: {e}")
+        raise  # let it crash so Render logs it
+    logger.debug("Startup event completed successfully")
+
 
 def _get_frontend_origins() -> list[str]:
     env = (os.getenv("FRONTEND_ORIGIN") or "").strip()
@@ -176,11 +193,18 @@ app.add_middleware(
 )
 
 
+# Minimal health endpoint - added early before any heavy init
+@app.get("/health")
+async def minimal_health():
+    """Minimal health check for Render deployment compatibility"""
+    return {"status": "alive", "timestamp": datetime.now(timezone.utc).isoformat(), "owner": "Roberto Villarreal Martinez"}
+
+
 SESSION_COOKIE_NAME = "roboto_session"
 
 
 def _utcnow() -> datetime:
-    return datetime.utcnow()
+    return datetime.now(timezone.utc)
 
 
 def _session_ttl() -> timedelta:
