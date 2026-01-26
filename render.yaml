@@ -5,7 +5,7 @@ services:
   - type: web
     name: roboto-sai-backend
     runtime: python
-    pythonVersion: 3.13
+    pythonVersion: 3.11
     plan: starter
     branch: main
     buildCommand: |
