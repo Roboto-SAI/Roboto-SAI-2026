@@ -17,6 +17,10 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 
+# Configure logging EARLY
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,23 +36,27 @@ import uuid
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
 from langchain_core.messages import HumanMessage, AIMessage
 
-# Import Roboto SAI SDK
-from roboto_sai_sdk import RobotoSAIClient, get_xai_grok
+# Import Roboto SAI SDK (optional) - updated for proper package structure
+try:
+    from roboto_sai_sdk import RobotoSAIClient, get_xai_grok
+    HAS_SDK = True
+except ImportError:
+    logger.warning("roboto_sai_sdk not available, using fallback implementations")
+    HAS_SDK = False
+    RobotoSAIClient = None
+    get_xai_grok = None
+
 from db import init_db, get_supabase_client
 # from models import Message  # Deprecated post-Supabase
 from advanced_emotion_simulator import AdvancedEmotionSimulator
 from langchain_memory import SupabaseMessageHistory
 from grok_llm import GrokLLM
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 # Load local .env when running outside Docker
 load_dotenv()
 
 # Global client instance
-roboto_client: Optional[RobotoSAIClient] = None
+roboto_client: Optional[Any] = None  # Optional[RobotoSAIClient]
 xai_grok = None
 emotion_simulator: Optional[AdvancedEmotionSimulator] = None
 grok_llm = None
@@ -73,20 +81,31 @@ async def lifespan(app: FastAPI):
         global emotion_simulator
         emotion_simulator = emotion_simulator_instance
 
-        if os.getenv("XAI_API_KEY"):
-            # Initialize Roboto SAI Client
-            roboto_client = RobotoSAIClient()
-            logger.info(f"✅ Roboto SAI Client initialized: {roboto_client.client_id}")
+        # Initialize Roboto SAI Client (optional)
+        if HAS_SDK and os.getenv("XAI_API_KEY"):
+            try:
+                roboto_client = RobotoSAIClient()
+                logger.info(f"✅ Roboto SAI Client initialized: {roboto_client.client_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to initialize Roboto SAI Client: {e}")
+                roboto_client = None
         else:
-            logger.warning("⚠️ No XAI_API_KEY - running in degraded mode (no AI)")
+            logger.warning("⚠️ SDK not available or XAI_API_KEY not set - running in degraded mode")
             roboto_client = None
 
-        # Initialize xAI Grok
-        xai_grok = get_xai_grok()
-        if xai_grok.available:
-            logger.info("✅ xAI Grok SDK available - Reasoning chains active")
+        # Initialize xAI Grok (optional)
+        if HAS_SDK:
+            try:
+                xai_grok = get_xai_grok()
+                if xai_grok.available:
+                    logger.info("✅ xAI Grok SDK available - Reasoning chains active")
+                else:
+                    logger.warning("⚠️ xAI Grok not available - check XAI_API_KEY")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to initialize xAI Grok: {e}")
+                xai_grok = None
         else:
-            logger.warning("⚠️ xAI Grok not available - check XAI_API_KEY")
+            logger.warning("⚠️ SDK not available - xAI Grok not initialized")
         
         # Initialize LangChain GrokLLM
         global grok_llm

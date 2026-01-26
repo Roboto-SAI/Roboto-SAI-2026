@@ -52,10 +52,24 @@ const coercePersistedAuthState = (value: unknown): PersistedAuthState => {
 };
 
 const getApiBaseUrl = (): string => {
+  // Check for explicit environment variables first
   const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
   const trimmed = envUrl.replace(/\/+$/, '');
-  if (!trimmed) return '';
-  return trimmed.endsWith('/api') ? trimmed.slice(0, -4) : trimmed;
+  if (trimmed) {
+    return trimmed.endsWith('/api') ? trimmed.slice(0, -4) : trimmed;
+  }
+  
+  // For production on Render, detect and use backend URL
+  if (globalThis.window?.location.hostname.includes('onrender.com')) {
+    return 'https://roboto-sai-backend.onrender.com';
+  }
+  
+  // For local development
+  if (globalThis.window?.location.hostname === 'localhost' || globalThis.window?.location.hostname === '127.0.0.1') {
+    return 'http://localhost:8000';
+  }
+  
+  return '';
 };
 
 interface AuthState {

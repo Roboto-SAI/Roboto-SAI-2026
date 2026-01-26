@@ -4,19 +4,10 @@ previews:
 services:
   - type: web
     name: roboto-sai-backend
-    runtime: python
-    pythonVersion: 3.13
+    runtime: docker
     plan: starter
     branch: main
-    buildCommand: |
-      python -m pip install --upgrade pip
-      pip install --no-cache-dir -r backend/requirements.txt
-      # If SDK is provided as an editable package in-repo, install it (no-op if not present)
-      pip install --no-cache-dir -e sdk/roboto-sai-sdk || true
-    startCommand: |
-      mkdir -p /var/data
-      cd backend
-      uvicorn main:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: ./backend/Dockerfile
     disk:
       name: data
       mountPath: /var/data
@@ -25,7 +16,7 @@ services:
       - key: XAI_API_KEY
         sync: false
       - key: FRONTEND_ORIGIN
-        sync: false
+        value: https://roboto-sai-fuego.onrender.com
       - key: FRONTEND_HASH_ROUTER
         value: "true"
       - key: SUPABASE_URL
@@ -41,24 +32,21 @@ services:
       - key: ROBO_EMOTION_STATE_PATH
         value: "/var/data/emotion_state.json"
     healthCheckPath: /api/health
-    healthCheckStartupFailureThreshold: 10
-    autoDeployTrigger: 'on'
+    autoDeployTrigger: commit
 
   - type: web
     name: roboto-sai-frontend
     runtime: node
     plan: starter
     branch: main
-    buildCommand: npm ci --legacy-peer-deps && npm run build
+    buildCommand: npm ci --legacy-peer-deps && VITE_API_BASE_URL=https://roboto-sai-backend.onrender.com VITE_API_URL=https://roboto-sai-backend.onrender.com npm run build
     startCommand: npm run preview -- --host 0.0.0.0 --port $PORT
-    staticPublishPath: dist
     envVars:
+      - key: VITE_API_BASE_URL
+        value: https://roboto-sai-backend.onrender.com
       - key: VITE_API_URL
         value: https://roboto-sai-backend.onrender.com
-    routes:
-      - path: "/"
-        destination: "/index.html"
-    autoDeployTrigger: 'on'
+    autoDeployTrigger: commit
 
   - type: redis
     name: roboto-sai-redis

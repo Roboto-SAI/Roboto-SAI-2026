@@ -33,7 +33,7 @@ RUN if [ -f /app/sdk/roboto-sai-sdk/pyproject.toml ] || [ -f /app/sdk/roboto-sai
         fi
 
 # Copy backend code
-COPY backend ./backend
+COPY backend/ .
 
 WORKDIR /app/backend
 
@@ -45,4 +45,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health').read()"
 
 # Run FastAPI with uvicorn
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
+CMD python -m uvicorn main:app --host 0.0.0.0 --port $PORT

@@ -11,9 +11,16 @@ from langchain_core.outputs import Generation, LLMResult
 from langchain_core.messages import BaseMessage, HumanMessage
 import logging
 
-from roboto_sai_sdk import get_xai_grok
-
 logger = logging.getLogger(__name__)
+
+# Import Roboto SAI SDK (optional)
+try:
+    from roboto_sai_sdk import get_xai_grok
+    HAS_SDK = True
+except ImportError:
+    logger.warning("roboto_sai_sdk not available in grok_llm")
+    HAS_SDK = False
+    get_xai_grok = None
 
 
 class GrokLLM(LLM):
@@ -30,7 +37,15 @@ class GrokLLM(LLM):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        object.__setattr__(self, 'client', get_xai_grok())
+        # Only initialize client if SDK is available
+        if HAS_SDK and get_xai_grok is not None:
+            try:
+                object.__setattr__(self, 'client', get_xai_grok())
+            except Exception as e:
+                logger.warning(f"Failed to initialize Grok client: {e}")
+                object.__setattr__(self, 'client', None)
+        else:
+            object.__setattr__(self, 'client', None)
         # Extract Responses API params if provided
         if 'previous_response_id' in kwargs:
             self.previous_response_id = kwargs.pop('previous_response_id')
