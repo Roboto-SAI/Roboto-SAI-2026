@@ -187,34 +187,47 @@ export const ChatInput = ({
         <input
           ref={fileInputRef}
           type="file"
+          name="attachments"
           multiple
           onChange={handleFileSelect}
           className="hidden"
           accept="image/*,.pdf,.doc,.docx,.txt,.md"
+          title="Attach files to your message"
+          aria-label="File attachment input"
         />
 
         {/* Voice Mode Button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onVoiceToggle}
-          className={`flex-shrink-0 transition-all duration-300 ${
-            voiceMode
-              ? isVoiceActive
-                ? 'bg-fire/30 text-fire hover:bg-fire/40 animate-pulse'
-                : 'bg-fire/20 text-fire hover:bg-fire/30'
-              : 'text-muted-foreground hover:text-fire hover:bg-fire/10'
-          }`}
-          title={voiceMode ? 'Exit Voice Mode' : 'Enter Voice Mode'}
-        >
-          {voiceMode ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-        </Button>
+        {(() => {
+          const getVoiceModeClass = () => {
+            if (!voiceMode) {
+              return 'text-muted-foreground hover:text-fire hover:bg-fire/10';
+            }
+            return isVoiceActive
+              ? 'bg-fire/30 text-fire hover:bg-fire/40 animate-pulse'
+              : 'bg-fire/20 text-fire hover:bg-fire/30';
+          };
+          
+          const voiceModeClass = getVoiceModeClass();
+          
+          return (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onVoiceToggle}
+              className={`flex-shrink-0 transition-all duration-300 ${voiceModeClass}`}
+              title={voiceMode ? 'Exit Voice Mode' : 'Enter Voice Mode'}
+            >
+              {voiceMode ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </Button>
+          );
+        })()}
 
         {/* Input Area */}
         <div className="flex-1 relative">
           <Textarea
             ref={textareaRef}
             value={input}
+            name="message"
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={voiceMode ? "Voice mode active - speak or type..." : "Speak to Roboto..."}

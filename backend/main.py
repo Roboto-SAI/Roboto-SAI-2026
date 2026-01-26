@@ -26,6 +26,7 @@ from pydantic import BaseModel
 import httpx
 import websockets
 from dotenv import load_dotenv
+import uuid
 
 # LangChain imports
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
@@ -118,6 +119,7 @@ def _get_frontend_origins() -> list[str]:
         "http://localhost:5173",
         "http://localhost:3000",
         "http://localhost:8080",
+        "http://localhost",
     ]
     # preserve ordering while removing duplicates
     out: list[str] = []
@@ -189,24 +191,38 @@ def _require_supabase():
     return supabase
 
 
+async def run_supabase_async(func):
+    """Run sync Supabase operation in thread to avoid blocking event loop."""
+    return await asyncio.to_thread(func)
+
+
 async def get_current_user(request: Request) -> Dict[str, Any]:
     """Get current user from auth_sessions cookie."""
+    supabase = get_supabase_client()
+    # Demo fallback when Supabase is not configured
+    if supabase is None:
+        return {
+            "id": "demo-user",
+            "email": "demo@example.com",
+            "display_name": "Demo",
+            "avatar_url": None,
+            "provider": "demo",
+        }
+
     sess_id = request.cookies.get(SESSION_COOKIE_NAME)
     if not sess_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
-
-    supabase = _require_supabase()
     now = _utcnow().isoformat()
     
     # Check session
-    result = supabase.table("auth_sessions").select("user_id").eq("id", sess_id).gte("expires_at", now).execute()
+    result = await run_supabase_async(lambda: supabase.table("auth_sessions").select("user_id").eq("id", sess_id).gte("expires_at", now).execute())
     if not result.data:
         raise HTTPException(status_code=401, detail="Session expired")
     
     user_id = result.data[0]["user_id"]
     
     # Get user
-    user_result = supabase.table("users").select("*").eq("id", user_id).execute()
+    user_result = await run_supabase_async(lambda: supabase.table("users").select("*").eq("id", user_id).execute())
     if not user_result.data:
         raise HTTPException(status_code=401, detail="User not found")
     
@@ -236,7 +252,7 @@ async def auth_logout(request: Request) -> JSONResponse:
     if sess_id:
         supabase = get_supabase_client()
         if supabase is not None:
-            supabase.table('auth_sessions').delete().eq('id', sess_id).execute()
+            await run_supabase_async(lambda: supabase.table('auth_sessions').delete().eq('id', sess_id).execute())
 
     resp = JSONResponse({"success": True})
     resp.delete_cookie(SESSION_COOKIE_NAME, path="/")
@@ -253,7 +269,7 @@ async def auth_register(req: RegisterRequest, request: Request) -> JSONResponse:
     supabase = _require_supabase()
     
     try:
-        result = supabase.auth.sign_up({"email": req.email, "password": req.password})
+        result = await run_supabase_async(lambda: supabase.auth.sign_up({"email": req.email, "password": req.password}))
         if not result.user:
             raise HTTPException(status_code=400, detail=result.error.message if result.error else "Registration failed")
         
@@ -265,12 +281,12 @@ async def auth_register(req: RegisterRequest, request: Request) -> JSONResponse:
             "display_name": req.email.split("@")[0],
             "provider": "supabase"
         }
-        supabase.table("users").upsert(user_data).execute()
+        await run_supabase_async(lambda: supabase.table("users").upsert(user_data).execute())
         
         # Local session cookie
         sess_id = secrets.token_urlsafe(32)
         expires = (_utcnow() + _session_ttl()).isoformat()
-        supabase.table("auth_sessions").insert({"id": sess_id, "user_id": user_id, "expires_at": expires}).execute()
+        await run_supabase_async(lambda: supabase.table("auth_sessions").insert({"id": sess_id, "user_id": user_id, "expires_at": expires}).execute())
         
         resp = JSONResponse({"success": True, "user": user_data})
         resp.set_cookie(
@@ -297,7 +313,7 @@ async def auth_login(req: LoginRequest, request: Request) -> JSONResponse:
     supabase = _require_supabase()
     
     try:
-        result = supabase.auth.sign_in_with_password({"email": req.email, "password": req.password})
+        result = await run_supabase_async(lambda: supabase.auth.sign_in_with_password({"email": req.email, "password": req.password}))
         if not result.user:
             raise HTTPException(status_code=401, detail=result.error.message if result.error else "Login failed")
         
@@ -309,12 +325,12 @@ async def auth_login(req: LoginRequest, request: Request) -> JSONResponse:
             "display_name": result.user.user_metadata.get("display_name", req.email.split("@")[0]) if result.user.user_metadata else req.email.split("@")[0],
             "provider": "supabase"
         }
-        supabase.table("users").upsert(user_data).execute()
+        await run_supabase_async(lambda: supabase.table("users").upsert(user_data).execute())
         
         # Local session cookie
         sess_id = secrets.token_urlsafe(32)
         expires = (_utcnow() + _session_ttl()).isoformat()
-        supabase.table("auth_sessions").insert({"id": sess_id, "user_id": user_id, "expires_at": expires}).execute()
+        await run_supabase_async(lambda: supabase.table("auth_sessions").insert({"id": sess_id, "user_id": user_id, "expires_at": expires}).execute())
         
         resp = JSONResponse({"success": True, "user": user_data})
         resp.set_cookie(
@@ -337,7 +353,7 @@ async def auth_magic_request(req: MagicRequest) -> Dict[str, Any]:
     supabase = _require_supabase()
     
     try:
-        supabase.auth.sign_in_with_otp({"email": req.email})
+        await run_supabase_async(lambda: supabase.auth.sign_in_with_otp({"email": req.email}))
         return {"success": True, "message": "Magic link sent"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -350,6 +366,8 @@ class ChatMessage(BaseModel):
     reasoning_effort: Optional[str] = "high"
     user_id: Optional[str] = None
     session_id: Optional[str] = None
+    previous_response_id: Optional[str] = None
+    use_encrypted_content: bool = False
 
 class EmotionSimRequest(BaseModel):
     """Emotion simulation request."""
@@ -387,7 +405,7 @@ class EssenceData(BaseModel):
 
 class FeedbackRequest(BaseModel):
     """Message feedback request"""
-    message_id: int
+    message_id: str
     rating: int  # 1=thumbs up, -1=thumbs down
 
 # Voice WebSocket Proxy
@@ -555,7 +573,7 @@ async def chat_with_grok(
 
         # Load conversation history
         history_store = SupabaseMessageHistory(session_id=session_id, user_id=user["id"])
-        history_messages = history_store.messages  # sync property
+        history_messages = await history_store._get_messages_async()
         
         # Prepare user message with emotion
         user_message = HumanMessage(
@@ -566,8 +584,16 @@ async def chat_with_grok(
         # Combine history with new message
         all_messages = history_messages + [user_message]
 
-        # Call GrokLLM with full conversation history
-        response_text = await grok_llm._acall(all_messages)
+        # Call GrokLLM with Responses API for conversation chaining
+        grok_result = await grok_llm.acall_with_response_id(
+            all_messages,
+            emotion=user_emotion.get('emotion_text', '') if user_emotion else '',
+            user_name=user.get('user_metadata', {}).get('name', 'user'),
+            previous_response_id=request.previous_response_id
+        )
+        response_text = grok_result.get('response', '')
+        response_id = grok_result.get('response_id')
+        encrypted_thinking = grok_result.get('encrypted_thinking')
 
         # Compute assistant emotion
         if emotion_simulator and response_text:
@@ -590,19 +616,37 @@ async def chat_with_grok(
                 logger.warning(f"Emotion simulation (assistant) failed: {emotion_error}")
 
         # Save conversation
-        await history_store.add_message(user_message)
+        user_message_id = await history_store.add_message(user_message)
         
         assistant_message = AIMessage(
             content=response_text,
             additional_kwargs=assistant_emotion or {}
         )
-        await history_store.add_message(assistant_message)
+        assistant_message_id = await history_store.add_message(assistant_message)
+        
+        # Store response_id if available
+        if response_id and assistant_message_id:
+            try:
+                supabase = get_supabase_client()
+                if supabase:
+                    await run_supabase_async(
+                        supabase.table('messages').update({
+                            'xai_response_id': response_id,
+                            'xai_encrypted_thinking': encrypted_thinking
+                        }).eq('id', assistant_message_id).execute
+                    )
+            except Exception as e:
+                logger.warning(f'Failed to store response_id: {e}')
 
         return {
             "success": True,
             "response": response_text,
             "reasoning_available": False,
-            "response_id": f"lc-{session_id}",
+            "response_id": response_id or f"lc-{session_id}",
+            "encrypted_thinking": encrypted_thinking,
+            "xai_stored": grok_result.get('stored', False),
+            "assistant_message_id": assistant_message_id,
+            "user_message_id": user_message_id,
             "emotion": {
                 "user": user_emotion,
                 "assistant": assistant_emotion,
@@ -623,10 +667,18 @@ async def get_chat_history(
 ) -> Dict[str, Any]:
   """Retrieve recent chat history."""
   supabase = get_supabase_client()
+  if supabase is None:
+    return {
+      "success": True,
+      "count": 0,
+      "messages": [],
+      "timestamp": datetime.now().isoformat(),
+    }
+
   query = supabase.table('messages').select('*').eq('user_id', user['id']).order('created_at', desc=True).limit(limit)
   if session_id:
     query = query.eq('session_id', session_id)
-  result = query.execute()
+  result = await run_supabase_async(query.execute)
   messages = result.data or []
   return {
     "success": True,
@@ -659,13 +711,19 @@ async def submit_feedback(
     if feedback.rating not in [1, -1]:
         raise HTTPException(status_code=400, detail="Rating must be 1 (thumbs up) or -1 (thumbs down)")
     
+    # Validate message_id is valid UUID
+    try:
+        uuid.UUID(feedback.message_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid message_id format")
+    
     supabase = get_supabase_client()
     data = {
         "message_id": feedback.message_id,
         "user_id": user["id"],
         "rating": feedback.rating,
     }
-    supabase.table('message_feedback').insert(data).execute()
+    await run_supabase_async(lambda: supabase.table('message_feedback').insert(data).execute())
     
     return {
         "success": True,

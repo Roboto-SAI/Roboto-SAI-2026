@@ -26,6 +26,9 @@ tsconfig.node.tsbuildinfo
 *.sln
 *.sw?
 .lovable/*
+.vs/*
+.vs\*
+
 
 # Backend
 BackendAdds/*

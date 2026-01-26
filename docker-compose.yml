@@ -32,7 +32,7 @@ services:
       target: production
     container_name: roboto-sai-prod
     ports:
-      - "80:80"
+      - "8080:80"
     environment:
       - NODE_ENV=production
       - VITE_API_BASE_URL=http://localhost:5000

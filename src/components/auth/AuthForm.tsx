@@ -94,6 +94,7 @@ const MagicLinkForm = (props: { email: string; onEmailChange: (value: string) =>
           <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             id="magicEmail"
+            name="magicEmail"
             type="email"
             placeholder="Enter your email"
             value={props.email}
@@ -175,6 +176,7 @@ const PasswordForm = (props: {
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 id="username"
+                name="username"
                 type="text"
                 placeholder="Display name"
                 value={props.username}
@@ -193,6 +195,7 @@ const PasswordForm = (props: {
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 id="email"
+                name="email"
                 type="email"
                 placeholder="Enter your email"
                 value={props.email}
@@ -211,6 +214,7 @@ const PasswordForm = (props: {
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 id="password"
+                name="password"
                 type={props.showPassword ? 'text' : 'password'}
                 placeholder="Enter your password"
                 value={props.password}
@@ -237,6 +241,7 @@ const PasswordForm = (props: {
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="confirmPassword"
+                  name="confirmPassword"
                   type={props.showPassword ? 'text' : 'password'}
                   placeholder="Confirm your password"
                   value={props.confirmPassword}

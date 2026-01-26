@@ -4,7 +4,7 @@
  */
 
 import { motion } from 'framer-motion';
-import { forwardRef } from 'react';
+import { forwardRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { User, Bot, Paperclip, FileText, Image } from 'lucide-react';
 import type { Message, FileAttachment } from '@/stores/chatStore';
@@ -44,6 +44,17 @@ const AttachmentPreview = ({ attachment }: { attachment: FileAttachment }) => {
 
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(({ message }, ref) => {
   const isUser = message.role === 'user';
+
+  useEffect(() => {
+    return () => {
+      if (!message.attachments) return;
+      message.attachments.forEach((attachment) => {
+        if (attachment.url.startsWith('blob:')) {
+          URL.revokeObjectURL(attachment.url);
+        }
+      });
+    };
+  }, [message.attachments]);
 
   return (
     <motion.div

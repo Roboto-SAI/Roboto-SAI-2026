@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, Volume2, VolumeX, X, Loader2 } from 'lucide-react';
+import { Mic, MicOff, Volume2, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -20,10 +20,11 @@ interface VoiceModeProps {
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 const getVoiceWsUrl = (): string => {
-  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-  const trimmed = baseUrl.replace(/\/+$/, '');
+  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
+  const fallback = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000';
+  const trimmed = (envUrl || fallback).replace(/\/+$/, '');
   const normalized = trimmed.endsWith('/api') ? trimmed.slice(0, -4) : trimmed;
-  const wsBase = normalized.replace(/^http/, 'ws');
+  const wsBase = normalized.replace(/^http(s?):/, (_match, secure) => (secure ? 'wss:' : 'ws:'));
   return `${wsBase}/api/voice/ws`;
 };
 
