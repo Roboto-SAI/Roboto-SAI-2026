@@ -8,10 +8,6 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy SDK package directory and install it
-COPY sdk/roboto-sai-sdk/roboto-sai-sdk /app/sdk/roboto-sai-sdk
-RUN pip install -e /app/sdk/roboto-sai-sdk
-
 # Copy requirements and install dependencies
 COPY backend/requirements.txt ./backend/
 COPY backend/constraints.txt ./backend/
