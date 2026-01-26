@@ -36,7 +36,7 @@ import uuid
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
 from langchain_core.messages import HumanMessage, AIMessage
 
-# Import Roboto SAI SDK (optional)
+# Import Roboto SAI SDK (optional) - updated for proper package structure
 try:
     from roboto_sai_sdk import RobotoSAIClient, get_xai_grok
     HAS_SDK = True
