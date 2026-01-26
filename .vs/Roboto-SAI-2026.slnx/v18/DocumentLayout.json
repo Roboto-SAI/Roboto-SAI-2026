@@ -1,7 +1,40 @@
 {
   "Version": 1,
   "WorkspaceRootPath": "R:\\Repos\\Roboto-SAI-2026\\",
-  "Documents": [],
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|R:\\Repos\\Roboto-SAI-2026\\src\\index.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\index.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|R:\\Repos\\Roboto-SAI-2026\\src\\pages\\Chat.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\pages\\Chat.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|R:\\Repos\\Roboto-SAI-2026\\src\\components\\chat\\VoiceMode.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\components\\chat\\VoiceMode.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|R:\\Repos\\Roboto-SAI-2026\\src\\components\\chat\\ChatMessage.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\components\\chat\\ChatMessage.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|R:\\Repos\\Roboto-SAI-2026\\src\\stores\\chatStore.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\stores\\chatStore.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|R:\\Repos\\Roboto-SAI-2026\\docker-compose.yml||{06C066C6-04A2-4E5D-8202-439FD4234EF1}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:docker-compose.yml||{06C066C6-04A2-4E5D-8202-439FD4234EF1}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|R:\\Repos\\Roboto-SAI-2026\\backend\\main.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\main.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|R:\\Repos\\Roboto-SAI-2026\\backend\\langchain_memory.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\langchain_memory.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    }
+  ],
   "DocumentGroupContainers": [
     {
       "Orientation": 0,
@@ -9,8 +42,112 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": -1,
+          "SelectedChildIndex": 7,
           "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "langchain_memory.py",
+              "DocumentMoniker": "R:\\Repos\\Roboto-SAI-2026\\backend\\langchain_memory.py",
+              "RelativeDocumentMoniker": "backend\\langchain_memory.py",
+              "ToolTip": "R:\\Repos\\Roboto-SAI-2026\\backend\\langchain_memory.py",
+              "RelativeToolTip": "backend\\langchain_memory.py",
+              "ViewState": "AgIAAB8AAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-01-23T19:31:29.973Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "main.py",
+              "DocumentMoniker": "R:\\Repos\\Roboto-SAI-2026\\backend\\main.py",
+              "RelativeDocumentMoniker": "backend\\main.py",
+              "ToolTip": "R:\\Repos\\Roboto-SAI-2026\\backend\\main.py",
+              "RelativeToolTip": "backend\\main.py",
+              "ViewState": "AgIAAHgAAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-01-23T19:31:23.359Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "docker-compose.yml",
+              "DocumentMoniker": "R:\\Repos\\Roboto-SAI-2026\\docker-compose.yml",
+              "RelativeDocumentMoniker": "docker-compose.yml",
+              "ToolTip": "R:\\Repos\\Roboto-SAI-2026\\docker-compose.yml",
+              "RelativeToolTip": "docker-compose.yml",
+              "ViewState": "AgIAACAAAAAAAAAAAABRwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003775|",
+              "WhenOpened": "2026-01-23T19:26:58.21Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "chatStore.ts",
+              "DocumentMoniker": "R:\\Repos\\Roboto-SAI-2026\\src\\stores\\chatStore.ts",
+              "RelativeDocumentMoniker": "src\\stores\\chatStore.ts",
+              "ToolTip": "R:\\Repos\\Roboto-SAI-2026\\src\\stores\\chatStore.ts",
+              "RelativeToolTip": "src\\stores\\chatStore.ts",
+              "ViewState": "AgIAAFIAAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-01-23T19:23:29.549Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "ChatMessage.tsx",
+              "DocumentMoniker": "R:\\Repos\\Roboto-SAI-2026\\src\\components\\chat\\ChatMessage.tsx",
+              "RelativeDocumentMoniker": "src\\components\\chat\\ChatMessage.tsx",
+              "ToolTip": "R:\\Repos\\Roboto-SAI-2026\\src\\components\\chat\\ChatMessage.tsx",
+              "RelativeToolTip": "src\\components\\chat\\ChatMessage.tsx",
+              "ViewState": "AgIAAAUAAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-01-23T19:19:41.868Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "VoiceMode.tsx",
+              "DocumentMoniker": "R:\\Repos\\Roboto-SAI-2026\\src\\components\\chat\\VoiceMode.tsx",
+              "RelativeDocumentMoniker": "src\\components\\chat\\VoiceMode.tsx",
+              "ToolTip": "R:\\Repos\\Roboto-SAI-2026\\src\\components\\chat\\VoiceMode.tsx",
+              "RelativeToolTip": "src\\components\\chat\\VoiceMode.tsx",
+              "ViewState": "AgIAAAcAAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-01-23T19:16:56.849Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Chat.tsx",
+              "DocumentMoniker": "R:\\Repos\\Roboto-SAI-2026\\src\\pages\\Chat.tsx",
+              "RelativeDocumentMoniker": "src\\pages\\Chat.tsx",
+              "ToolTip": "R:\\Repos\\Roboto-SAI-2026\\src\\pages\\Chat.tsx",
+              "RelativeToolTip": "src\\pages\\Chat.tsx",
+              "ViewState": "AgIAADQAAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-01-23T19:16:37.2Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "index.css",
+              "DocumentMoniker": "R:\\Repos\\Roboto-SAI-2026\\src\\index.css",
+              "RelativeDocumentMoniker": "src\\index.css",
+              "ToolTip": "R:\\Repos\\Roboto-SAI-2026\\src\\index.css",
+              "RelativeToolTip": "src\\index.css",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2026-01-23T19:09:56.859Z",
+              "EditorCaption": ""
+            },
             {
               "$type": "Bookmark",
               "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"

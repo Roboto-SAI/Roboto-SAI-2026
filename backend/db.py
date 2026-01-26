@@ -34,6 +34,3 @@ def init_db() -> None:
             logger.warning(f"Table {table} verify failed: {e}")
     
     logger.info("Supabase tables verified")
-
-
-from utils.supabase_client import get_supabase_client

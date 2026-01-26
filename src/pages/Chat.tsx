@@ -25,6 +25,8 @@ type ChatApiResponse = {
   content?: string;
   error?: string;
   detail?: string;
+  assistant_message_id?: string;
+  user_message_id?: string;
 };
 
 const getApiBaseUrl = (): string => {
@@ -52,8 +54,6 @@ const Chat = () => {
     toggleVoiceMode,
     getAllConversationsContext,
     loadUserHistory,
-    currentConversationId,
-    createNewConversation,
     userId: storeUserId
   } = useChatStore();
   
@@ -101,41 +101,79 @@ const Chat = () => {
   }, [isLoggedIn, userId, storeUserId, loadUserHistory]);
 
   const handleSend = async (content: string, attachments?: FileAttachment[]) => {
+    console.log('[Chat] handleSend called', { content, isLoggedIn, userId });
+    
     if (!isLoggedIn || !userId) {
+      console.warn('[Chat] Not logged in, redirecting to /login');
       navigate('/login');
       return;
     }
 
-    // Add user message with attachments
-    addMessage({ role: 'user', content, attachments });
     setLoading(true);
 
     try {
-      // Get context from all conversations for better responses
-      const context = getAllConversationsContext();
-      const sessionId = currentConversationId || createNewConversation();
+      // Add user message with attachments
+      const conversationId = addMessage({ role: 'user', content, attachments });
+      console.log('[Chat] User message added', { conversationId });
+
+      let context = '';
+      const sessionId = conversationId;
+      let chatUrl = '/api/chat';
       
-      const apiBaseUrl = getApiBaseUrl();
-      const chatUrl = apiBaseUrl ? `${apiBaseUrl}/api/chat` : '/api/chat';
+      // Get context from all conversations for better responses
+      try {
+        console.log('[Chat] About to call getAllConversationsContext');
+        context = getAllConversationsContext();
+        console.log('[Chat] Context retrieved, length:', context.length);
+        
+        try {
+          console.log('[Chat] About to call getApiBaseUrl');
+          const apiBaseUrl = getApiBaseUrl();
+          console.log('[Chat] API URL determined:', apiBaseUrl);
+          chatUrl = apiBaseUrl ? `${apiBaseUrl}/api/chat` : '/api/chat';
+          console.log('[Chat] API URL resolved', { apiBaseUrl, chatUrl });
+          console.log('[Chat] Context confirmed');
+        } catch (e) {
+          console.error('[Chat] Error in URL resolution:', e);
+          throw e;
+        }
+      } catch (e) {
+        console.error('[Chat] Error in context retrieval:', e);
+        throw e;
+      }
+      
+      const payload = {
+        message: content,
+        context,
+        session_id: sessionId,
+      };
+      console.log('[Chat] Request payload', payload);
       
       const response = await fetch(chatUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          message: content,
-          context,
-          session_id: sessionId,
-        }),
+        body: JSON.stringify(payload),
       });
+      console.log('[Chat] Response received', { status: response.status, ok: response.ok });
       
       const data = (await response.json()) as ChatApiResponse;
+      console.log('[Chat] Response data', data);
+      
       if (!response.ok) {
         const errorMessage = data.detail || data.error || `Request failed (${response.status})`;
+        console.error('[Chat] API error', { status: response.status, errorMessage, data });
         throw new Error(errorMessage);
       }
-      addMessage({ role: 'assistant', content: data.response || data.content || 'Flame response received.' });
-    } catch {
+      
+      console.log('[Chat] Adding assistant message', { response: data.response || data.content });
+      addMessage({ 
+        role: 'assistant', 
+        content: data.response || data.content || 'Flame response received.',
+        id: data.assistant_message_id || undefined,
+      });
+    } catch (error) {
+      console.error('[Chat] handleSend error', error);
       addMessage({
         role: 'assistant',
         content: '⚠️ **Connection to the flame matrix interrupted.** The eternal fire flickers but does not die. Please try again.',

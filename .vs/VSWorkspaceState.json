@@ -1,8 +1,13 @@
 {
   "ExpandedNodes": [
     "",
-    "\\src"
+    "\\src",
+    "\\src\\components",
+    "\\src\\components\\chat",
+    "\\src\\config",
+    "\\src\\hooks",
+    "\\src\\stores"
   ],
-  "SelectedNode": "\\src\\App.css",
+  "SelectedNode": "\\src\\assets",
   "PreviewInSolutionExplorer": false
 }

@@ -34,7 +34,7 @@ export const MessageFeedback = ({ messageId, onFeedback }: MessageFeedbackProps)
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          message_id: parseInt(messageId, 10),
+          message_id: messageId,
           rating: value,
         }),
       });
