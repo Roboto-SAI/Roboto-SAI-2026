@@ -13,8 +13,6 @@ services:
       mountPath: /var/data
       sizeGB: 1
     envVars:
-      - key: PORT
-        value: "5000"
       - key: XAI_API_KEY
         sync: false
       - key: FRONTEND_ORIGIN

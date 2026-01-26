@@ -32,18 +32,17 @@ RUN if [ -f /app/sdk/roboto-sai-sdk/pyproject.toml ] || [ -f /app/sdk/roboto-sai
             exit 1; \
         fi
 
-# Copy backend code and bootstrap script
+# Copy backend code
 COPY backend/ .
-COPY backend/bootstrap.py /app/bootstrap.py
 
 WORKDIR /app/backend
 
-# Expose port
+# Expose port (Render will set PORT env var)
 EXPOSE 5000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health').read()" || exit 1
+# Health Check - more robust port detection
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD python -c "import socket; s = socket.socket(); s.connect(('localhost', int(5000))); s.close()" || exit 1
 
-# Use Python bootstrap script for startup with better diagnostics
-CMD ["python", "/app/bootstrap.py"]
+# Simple, direct uvicorn startup using exec form
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000", "--log-level", "info"]
