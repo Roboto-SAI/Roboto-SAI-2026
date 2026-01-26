@@ -13,13 +13,13 @@ RUN apt-get update && apt-get install -y \
 
 # Copy SDK package directory (repo root) and install as editable package
 # The SDK repo layout may be either:
-# - ../sdk/roboto-sai-sdk/pyproject.toml
-# - ../sdk/roboto-sai-sdk/roboto-sai-sdk/pyproject.toml
-COPY ../sdk/roboto-sai-sdk /app/sdk/roboto-sai-sdk
+# - sdk/roboto-sai-sdk/pyproject.toml
+# - sdk/roboto-sai-sdk/roboto-sai-sdk/pyproject.toml
+COPY sdk/roboto-sai-sdk /app/sdk/roboto-sai-sdk
 
 # Copy requirements/constraints and install dependencies
-COPY requirements.txt ./backend/
-COPY constraints.txt ./backend/
+COPY backend/requirements.txt ./backend/
+COPY backend/constraints.txt ./backend/
 RUN pip install --no-cache-dir -r ./backend/requirements.txt -c ./backend/constraints.txt --extra-index-url https://download.pytorch.org/whl/cpu
 
 # Install SDK as editable package (handle nested or root layout)
@@ -33,7 +33,7 @@ RUN if [ -f /app/sdk/roboto-sai-sdk/pyproject.toml ] || [ -f /app/sdk/roboto-sai
         fi
 
 # Copy backend code
-COPY . ./backend
+COPY backend/ .
 
 WORKDIR /app/backend
 
