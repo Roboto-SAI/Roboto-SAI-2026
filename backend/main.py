@@ -366,7 +366,7 @@ async def auth_logout(request: Request) -> JSONResponse:
             await run_supabase_async(lambda: supabase.table('auth_sessions').delete().eq('id', sess_id).execute())
 
     resp = JSONResponse({"success": True})
-    resp.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    resp.delete_cookie(SESSION_COOKIE_NAME, path="/", domain=".onrender.com")
     return resp
 
 
@@ -408,6 +408,7 @@ async def auth_register(req: RegisterRequest, request: Request) -> JSONResponse:
             samesite=_cookie_samesite(),
             max_age=int(_session_ttl().total_seconds()),
             path="/",
+            domain=".onrender.com",
         )
         return resp
     except Exception as e:
@@ -452,6 +453,7 @@ async def auth_login(req: LoginRequest, request: Request) -> JSONResponse:
             samesite=_cookie_samesite(),
             max_age=int(_session_ttl().total_seconds()),
             path="/",
+            domain=".onrender.com",
         )
         return resp
     except Exception as e:
