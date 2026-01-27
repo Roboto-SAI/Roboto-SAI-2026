@@ -75,6 +75,105 @@ class GrokLLM(LLM):
         finally:
             loop.close()
 
+    def _normalize_grok_result(self, result: Any) -> Dict[str, Any]:
+        if not isinstance(result, dict):
+            return {"success": False, "error": "Invalid Grok response"}
+        if "success" not in result:
+            result["success"] = bool(result.get("response"))
+        if "response_id" not in result and "id" in result:
+            result["response_id"] = result["id"]
+        return result
+
+    def _invoke_grok_client(
+        self,
+        user_message: str,
+        roboto_context: Optional[str],
+        previous_response_id: Optional[str],
+        emotion: str,
+        user_name: str,
+    ) -> Dict[str, Any]:
+        client = self.client
+        if hasattr(client, "roboto_grok_chat"):
+            result = client.roboto_grok_chat(
+                user_message=user_message,
+                roboto_context=roboto_context,
+                previous_response_id=previous_response_id,
+            )
+            return self._normalize_grok_result(result)
+
+        if hasattr(client, "chat"):
+            result = client.chat(
+                message=user_message,
+                emotion=emotion,
+                user_name=user_name,
+                previous_response_id=previous_response_id,
+                use_encrypted_content=self.use_encrypted_content,
+                store_messages=self.store_messages,
+            )
+            return self._normalize_grok_result(result)
+
+        if hasattr(client, "grok_chat"):
+            result = client.grok_chat(
+                user_message,
+                roboto_context=roboto_context,
+                previous_response_id=previous_response_id,
+            )
+            return self._normalize_grok_result(result)
+
+        if hasattr(client, "create_chat_with_system_prompt") and hasattr(client, "send_message"):
+            system_prompt = "You are Roboto SAI." if not roboto_context else f"Roboto SAI Context: {roboto_context}"
+            chat = client.create_chat_with_system_prompt(
+                system_prompt,
+                reasoning_effort=self.reasoning_effort,
+            )
+            result = client.send_message(chat, user_message, previous_response_id=previous_response_id)
+            return self._normalize_grok_result(result)
+
+        return {"success": False, "error": "Grok client does not support chat"}
+
+    def _build_from_messages(self, messages: List[BaseMessage]) -> tuple[str, str, Optional[str]]:
+        context_parts = []
+        for msg in messages[:-1]:
+            role = "User" if isinstance(msg, HumanMessage) else "Assistant"
+            context_parts.append(f"{role}: {msg.content}")
+        context = "\n".join(context_parts)
+        last_msg = messages[-1]
+        user_message = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+
+        emotion: Optional[str] = None
+        if hasattr(last_msg, "additional_kwargs"):
+            emotion = last_msg.additional_kwargs.get("emotion_text", "") or None
+            if emotion:
+                context = f"{context}\nUser Emotion: {emotion}" if context else f"User Emotion: {emotion}"
+
+        return user_message, context, emotion
+
+    def _build_prompt_context(
+        self,
+        prompt: str | List[BaseMessage],
+        context_override: Optional[str] = None,
+    ) -> tuple[str, str, Optional[str]]:
+        if isinstance(prompt, list):
+            return self._build_from_messages(prompt)
+        if isinstance(prompt, str):
+            return prompt, context_override or "", None
+        return str(prompt), context_override or "", None
+
+    def _apply_stop_sequences(self, response: str, stop: Optional[List[str]]) -> str:
+        if not stop:
+            return response
+        for stop_seq in stop:
+            if stop_seq in response:
+                return response.split(stop_seq)[0]
+        return response
+
+    def _handle_grok_result(self, result: Dict[str, Any], stop: Optional[List[str]]) -> str:
+        if result.get("success"):
+            response = result.get("response", "")
+            return self._apply_stop_sequences(response, stop)
+        error = result.get("error", "Unknown error")
+        raise RuntimeError(f"Grok API error: {error}")
+
     async def acall_with_response_id(
         self,
         prompt: str | List[BaseMessage],
@@ -118,10 +217,12 @@ class GrokLLM(LLM):
             logger.warning(f"Context too large ({len(roboto_context)} chars), truncating to 200k")
             roboto_context = roboto_context[:200000] + "... (truncated)"
         
-        result = self.client.roboto_grok_chat(
+        result = self._invoke_grok_client(
             user_message=user_message,
             roboto_context=roboto_context,
             previous_response_id=kwargs.get("previous_response_id"),
+            emotion=emotion,
+            user_name=user_name,
         )
 
         logger.info(f"Grok response ID: {result.get('response_id')}")
@@ -142,32 +243,7 @@ class GrokLLM(LLM):
         if not hasattr(self.client, 'available') or not self.client.available:
             raise ValueError("Grok client not available")
 
-        # Handle input
-        if isinstance(prompt, str):
-            user_message = prompt
-            context = kwargs.get("context", "")
-        elif isinstance(prompt, list):
-            # Extract last human message as the new input
-            messages = prompt
-            context_parts = []
-            for msg in messages[:-1]:  # All except last
-                role = "User" if isinstance(msg, HumanMessage) else "Assistant"
-                context_parts.append(f"{role}: {msg.content}")
-            context = "\n".join(context_parts)
-            last_msg = messages[-1]
-            user_message = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
-        else:
-            user_message = str(prompt)
-            context = kwargs.get("context", "")
-
-        # Extract history or emotion from kwargs
-        if isinstance(prompt, list) and prompt:
-            last_msg = prompt[-1]
-            if hasattr(last_msg, 'additional_kwargs'):
-                # Use emotion in context
-                emotion = last_msg.additional_kwargs.get("emotion_text", "")
-                if emotion:
-                    context += f"\nUser Emotion: {emotion}"
+        user_message, context, emotion = self._build_prompt_context(prompt, kwargs.get("context"))
 
         # Prepare roboto context
         roboto_context = context if context else None
@@ -177,24 +253,16 @@ class GrokLLM(LLM):
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(
                 None,
-                lambda: self.client.roboto_grok_chat(
+                lambda: self._invoke_grok_client(
                     user_message=user_message,
                     roboto_context=roboto_context,
+                    previous_response_id=kwargs.get("previous_response_id"),
+                    emotion=emotion if "emotion" in locals() else "neutral",
+                    user_name=kwargs.get("user_name", "user"),
                 )
             )
 
-            if result.get("success"):
-                response = result.get("response", "")
-                # Apply stop sequences if provided
-                if stop:
-                    for stop_seq in stop:
-                        if stop_seq in response:
-                            response = response.split(stop_seq)[0]
-                            break
-                return response
-            else:
-                error = result.get("error", "Unknown error")
-                raise RuntimeError(f"Grok API error: {error}")
+            return self._handle_grok_result(result, stop)
 
         except Exception as e:
             raise RuntimeError(f"Grok call failed: {e}")
