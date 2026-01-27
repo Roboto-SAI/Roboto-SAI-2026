@@ -285,7 +285,11 @@ def _cookie_secure(request: Request) -> bool:
         return env.strip().lower() == "true"
     forwarded_proto = request.headers.get("x-forwarded-proto")
     scheme = forwarded_proto or request.url.scheme
-    return scheme == "https"
+    if scheme == "https":
+        return True
+    if (os.getenv("PYTHON_ENV") or "").strip().lower() == "production" and request.url.hostname not in ("localhost", "127.0.0.1"):
+        return True
+    return False
 
 
 def _cookie_samesite() -> str:
@@ -297,9 +301,6 @@ def _cookie_samesite() -> str:
 
 def _cookie_domain(request: Request) -> Optional[str]:
     """Return cookie domain based on environment."""
-    # For production (Render), use .onrender.com
-    if request.url.hostname and "onrender.com" in request.url.hostname:
-        return ".onrender.com"
     # For localhost, return None (browser uses current domain)
     if request.url.hostname in ("localhost", "127.0.0.1"):
         return None
