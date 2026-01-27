@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements and install dependencies
 COPY backend/requirements.txt ./backend/
 COPY backend/constraints.txt ./backend/
+COPY sdk/ /app/sdk/
 RUN pip install --no-cache-dir -r ./backend/requirements.txt -c ./backend/constraints.txt --extra-index-url https://download.pytorch.org/whl/cpu
 
 # Copy backend code

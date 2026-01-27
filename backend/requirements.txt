@@ -18,8 +18,8 @@ cryptography>=42.0.0
 langchain-core>=0.3.27,<0.4.0
 langchain-community>=0.3.10,<0.4.0
 
-# Roboto SAI SDK for XAI Grok integration (from GitHub repo)
-roboto-sai-sdk @ git+https://github.com/Roboto-SAI-LLC/roboto-sai-sdk.git
+# Roboto SAI SDK for XAI Grok integration (local monorepo)
+-e ../sdk/roboto-sai-sdk/roboto-sai-sdk
 
 # Quantum simulation (qutip is lightweight)
 qutip>=5.2.0

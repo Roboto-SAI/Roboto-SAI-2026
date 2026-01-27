@@ -783,6 +783,8 @@ async def chat_with_grok(
         
     except Exception as e:
         logger.error(f"Chat error: {e}")
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/chat/history", tags=["Chat"])
