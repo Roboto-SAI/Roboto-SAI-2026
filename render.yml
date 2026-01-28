@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: roboto-sai
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: VITE_API_URL
+        value: https://roboto-sai-backend.onrender.com
+
+  - type: web
+    name: roboto-sai-backend
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: XAI_API_KEY
+        sync: false
+      - key: FRONTEND_ORIGIN
+        value: https://roboto-sai.onrender.com
+      - key: FRONTEND_HASH_ROUTER
+        value: "true"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SESSION_TTL_SECONDS
+        value: "2592000"
+      - key: PYTHON_ENV
+        value: production
+      - key: ROBO_EMOTION_STATE_PATH
+        value: /var/data/emotion_state.json
+    healthCheckPath: /api/health
+    healthCheckStartupFailureThreshold: 10
