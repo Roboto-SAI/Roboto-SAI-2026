@@ -1,6 +1,7 @@
 {
   "ExpandedNodes": [
     "",
+    "\\backend",
     "\\src",
     "\\src\\components",
     "\\src\\components\\chat",
@@ -8,6 +9,6 @@
     "\\src\\hooks",
     "\\src\\stores"
   ],
-  "SelectedNode": "\\src\\assets",
+  "SelectedNode": "\\backend\\main.py",
   "PreviewInSolutionExplorer": false
 }

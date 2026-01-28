@@ -112,7 +112,7 @@ from langchain_memory import SupabaseMessageHistory
 print("DEBUG: SupabaseMessageHistory imported (with fallback support)")
 
 from utils.supabase_client import get_supabase_client
-print("DEBUG: get_supabase_client imported")
+print("DEBUG: get_supabase_client imported
 
 from db import init_db
 print("DEBUG: init_db imported")
@@ -570,7 +570,7 @@ class FeedbackRequest(BaseModel):
     rating: int  # 1=thumbs up, -1=thumbs down
 
 # Voice WebSocket Proxy
-@app.websocket("/api/voice/ws")
+@app.websocket("/api/voice", tags=["Voice"])
 async def voice_proxy(websocket: WebSocket) -> None:
     """Proxy WebSocket for Grok Voice Agent API (server-side auth)."""
     await websocket.accept()
@@ -699,11 +699,103 @@ async def chat_with_grok(
     """
     Chat with xAI Grok using Roboto SAI context with LangChain memory
     """
-    if not os.getenv("XAI_API_KEY"):
-        raise HTTPException(status_code=503, detail="Roboto SAI not available: XAI_API_KEY not configured")
-    if not grok_llm or not xai_grok or not xai_grok.available:
-        raise HTTPException(status_code=503, detail="Grok not available")
+    # Check if Grok is available
+    has_api_key = bool(os.getenv("XAI_API_KEY"))
+    grok_available = has_api_key and grok_llm is not None and xai_grok is not None and xai_grok.available
     
+    if not grok_available:
+        # Demo mode: provide a simulated response
+        logger.info("Grok not available, providing demo response")
+        
+        # Still try to save/load history if possible
+        session_id = request.session_id or "default"
+        user_emotion = None
+        assistant_emotion = None
+        
+        # Load conversation history (may work even without Supabase)
+        try:
+            history_store = SupabaseMessageHistory(session_id=session_id, user_id=user["id"])
+            history_messages = await history_store._get_messages_async()
+        except Exception as history_error:
+            logger.warning(f"Failed to load history in demo mode: {history_error}")
+            history_store = None
+            history_messages = []
+        
+        # Simulate emotion analysis
+        if emotion_simulator:
+            try:
+                emotion_text = emotion_simulator.simulate_emotion(
+                    event=request.message,
+                    intensity=5,
+                    blend_threshold=0.8,
+                    holistic_influence=False,
+                    cultural_context=None,
+                )
+                base_emotion = emotion_simulator.get_current_emotion()
+                probabilities = emotion_simulator.get_emotion_probabilities(request.message)
+                user_emotion = {
+                    "emotion": base_emotion,
+                    "emotion_text": emotion_text,
+                    "probabilities": probabilities,
+                }
+                
+                # Generate assistant emotion based on simulated response
+                demo_response = f"I understand you're feeling {emotion_text.lower()}. The eternal flame burns brightly. How can I assist you in your quest?"
+                assistant_emotion_text = emotion_simulator.simulate_emotion(
+                    event=demo_response,
+                    intensity=5,
+                    blend_threshold=0.8,
+                    holistic_influence=False,
+                    cultural_context=None,
+                )
+                assistant_base_emotion = emotion_simulator.get_current_emotion()
+                assistant_probabilities = emotion_simulator.get_emotion_probabilities(demo_response)
+                assistant_emotion = {
+                    "emotion": assistant_base_emotion,
+                    "emotion_text": assistant_emotion_text,
+                    "probabilities": assistant_probabilities,
+                }
+            except Exception as emotion_error:
+                logger.warning(f"Emotion simulation failed in demo mode: {emotion_error}")
+        
+        # Save messages if possible
+        user_message_id = None
+        assistant_message_id = None
+        if history_store:
+            try:
+                user_message = HumanMessage(
+                    content=request.message,
+                    additional_kwargs=user_emotion or {}
+                )
+                user_message_id = await history_store.add_message(user_message)
+                
+                assistant_message = AIMessage(
+                    content=demo_response,
+                    additional_kwargs=assistant_emotion or {}
+                )
+                assistant_message_id = await history_store.add_message(assistant_message)
+            except Exception as save_error:
+                logger.warning(f"Failed to save messages in demo mode: {save_error}")
+        
+        return {
+            "success": True,
+            "response": demo_response,
+            "reasoning_available": False,
+            "response_id": f"demo-{session_id}-{int(datetime.now().timestamp())}",
+            "encrypted_thinking": None,
+            "xai_stored": False,
+            "assistant_message_id": assistant_message_id,
+            "user_message_id": user_message_id,
+            "emotion": {
+                "user": user_emotion,
+                "assistant": assistant_emotion,
+            },
+            "memory_integrated": history_store is not None,
+            "demo_mode": True,
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    # Full Grok mode (when API key is available)
     try:
         user_emotion: Optional[Dict[str, Any]] = None
         assistant_emotion: Optional[Dict[str, Any]] = None
