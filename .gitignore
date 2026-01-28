@@ -58,6 +58,10 @@ venv/
 venv*/
 venv_linux/
 
+# Backend env vars (do NOT commit real values)
+backend_env_vars.json
+backend_env_vars.*.json
+
 # Roboto AI API keys
 .Roboto
 ~
