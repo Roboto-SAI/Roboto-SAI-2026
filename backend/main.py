@@ -107,8 +107,9 @@ print("DEBUG: AdvancedEmotionSimulator imported")
 from grok_llm import GrokLLM
 print("DEBUG: GrokLLM imported")
 
-from memory_system import SupabaseMessageHistory
-print("DEBUG: SupabaseMessageHistory imported")
+# Use langchain_memory which has in-memory fallback when Supabase unavailable
+from langchain_memory import SupabaseMessageHistory
+print("DEBUG: SupabaseMessageHistory imported (with fallback support)")
 
 from utils.supabase_client import get_supabase_client
 print("DEBUG: get_supabase_client imported")
@@ -134,6 +135,7 @@ async def lifespan(app: FastAPI):
     print("DEBUG: Lifespan startup beginning...")
     
     logger.info("🚀 Roboto SAI 2026 Backend Starting...")
+    logger.info("📍 Phase 1: Database initialization")
 
     try:
         # Initialize database (graceful fallback if Supabase unavailable)
@@ -143,6 +145,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"⚠️ Database initialization failed (running in demo mode): {e}")
 
+        logger.info("📍 Phase 2: Emotion simulator initialization")
         # Initialize emotion simulator
         state_path = os.getenv("ROBO_EMOTION_STATE_PATH", "./data/emotion_state.json")
         emotion_simulator_instance = AdvancedEmotionSimulator()
@@ -156,6 +159,7 @@ async def lifespan(app: FastAPI):
         global emotion_simulator
         emotion_simulator = emotion_simulator_instance
 
+        logger.info("📍 Phase 3: SDK client initialization")
         # Initialize Roboto SAI Client (optional)
         if HAS_SDK and os.getenv("XAI_API_KEY"):
             try:
@@ -182,6 +186,7 @@ async def lifespan(app: FastAPI):
         else:
             logger.warning("⚠️ SDK not available - xAI Grok not initialized")
         
+        logger.info("📍 Phase 4: LangChain GrokLLM initialization")
         # Initialize LangChain GrokLLM (graceful fallback)
         global grok_llm
         try:
@@ -191,7 +196,9 @@ async def lifespan(app: FastAPI):
             logger.warning(f"⚠️ Could not initialize GrokLLM: {e}")
             grok_llm = None
             
+        logger.info("📍 Phase 5: Startup complete")
         logger.info("🚀 Backend initialization complete (may be in degraded mode)")
+        logger.info(f"📊 Status: SDK={'available' if HAS_SDK else 'unavailable'}, Grok={xai_grok is not None and xai_grok.available if xai_grok else False}, GrokLLM={grok_llm is not None}")
     except Exception as e:
         logger.error(f"🚨 Unexpected backend initialization error: {e}")
         # Still allow the app to start - don't crash
@@ -722,9 +729,14 @@ async def chat_with_grok(
             except Exception as emotion_error:
                 logger.warning(f"Emotion simulation (user) failed: {emotion_error}")
 
-        # Load conversation history
-        history_store = SupabaseMessageHistory(session_id=session_id, user_id=user["id"])
-        history_messages = await history_store._get_messages_async()
+        # Load conversation history with graceful fallback
+        try:
+            history_store = SupabaseMessageHistory(session_id=session_id, user_id=user["id"])
+            history_messages = await history_store._get_messages_async()
+        except Exception as history_error:
+            logger.warning(f"Failed to load history (using empty): {history_error}")
+            history_store = None
+            history_messages = []
         
         # Prepare user message with emotion
         user_message = HumanMessage(
@@ -768,14 +780,24 @@ async def chat_with_grok(
             except Exception as emotion_error:
                 logger.warning(f"Emotion simulation (assistant) failed: {emotion_error}")
 
-        # Save conversation
-        user_message_id = await history_store.add_message(user_message)
-        
-        assistant_message = AIMessage(
-            content=response_text,
-            additional_kwargs=assistant_emotion or {}
-        )
-        assistant_message_id = await history_store.add_message(assistant_message)
+        # Save conversation (if history_store is available)
+        user_message_id = None
+        assistant_message_id = None
+        if history_store:
+            try:
+                user_message_id = await history_store.add_message(user_message)
+                assistant_message = AIMessage(
+                    content=response_text,
+                    additional_kwargs=assistant_emotion or {}
+                )
+                assistant_message_id = await history_store.add_message(assistant_message)
+            except Exception as save_error:
+                logger.warning(f"Failed to save messages: {save_error}")
+        else:
+            assistant_message = AIMessage(
+                content=response_text,
+                additional_kwargs=assistant_emotion or {}
+            )
         
         # Store response_id if available
         if response_id and assistant_message_id:
