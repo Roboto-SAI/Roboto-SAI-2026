@@ -112,7 +112,7 @@ from langchain_memory import SupabaseMessageHistory
 print("DEBUG: SupabaseMessageHistory imported (with fallback support)")
 
 from utils.supabase_client import get_supabase_client
-print("DEBUG: get_supabase_client imported
+print("DEBUG: get_supabase_client imported")
 
 from db import init_db
 print("DEBUG: init_db imported")
