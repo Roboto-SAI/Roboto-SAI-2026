@@ -194,9 +194,10 @@ async def lifespan(app: FastAPI):
         logger.info("🚀 Backend initialization complete (may be in degraded mode)")
     except Exception as e:
         logger.error(f"🚨 Unexpected backend initialization error: {e}")
-        # Still allow the app to start
-        logger.info("Starting app in minimal mode...")
-        raise
+        # Still allow the app to start - don't crash
+        logger.info("Starting app in minimal/demo mode...")
+        import traceback
+        traceback.print_exc()
     
     yield
 
@@ -275,11 +276,17 @@ app.add_middleware(
 )
 
 
-# Minimal health endpoint - added early before any heavy init
+# Minimal health endpoints - added early before any heavy init
+@app.get("/api/health")
 @app.get("/health")
-async def minimal_health():
-    """Minimal health check for Render deployment compatibility"""
-    return {"status": "alive", "timestamp": datetime.now(timezone.utc).isoformat(), "owner": "Roberto Villarreal Martinez"}
+async def health_check():
+    """Health check endpoint for Render deployment and monitoring"""
+    return {
+        "status": "healthy",
+        "service": "roboto-sai-2026",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "ready": True
+    }
 
 
 SESSION_COOKIE_NAME = "roboto_session"
@@ -1039,11 +1046,6 @@ async def trigger_hyperspeed_evolution(target: str = "general") -> Dict[str, Any
         logger.error(f"Hyperspeed evolution error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/health", tags=["Health"])
-async def simple_health_check() -> Dict[str, str]:
-    """Simple health check for Render deployment compatibility"""
-    return {"status": "healthy", "service": "roboto-sai-2026", "timestamp": datetime.now().isoformat()}
-
 @app.get("/", tags=["Root"])
 async def root() -> Dict[str, str]:
     """Root endpoint with API info"""
@@ -1052,7 +1054,7 @@ async def root() -> Dict[str, str]:
         "version": "0.1.0",
         "docs": "/docs",
         "status": "/api/status",
-        "health": "/health"
+        "health": "/api/health"
     }
 
 # Exception handler for detailed error responses
