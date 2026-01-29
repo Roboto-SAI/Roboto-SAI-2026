@@ -19,6 +19,7 @@ import { Flame, Skull, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { useToast } from '@/components/ui/use-toast';
 
 type ChatApiResponse = {
   response?: string;
@@ -41,6 +42,7 @@ const getApiBaseUrl = (): string => {
 
 const Chat = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { userId, isLoggedIn, refreshSession } = useAuthStore();
   const { 
     getMessages, 

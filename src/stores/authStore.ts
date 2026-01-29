@@ -5,6 +5,15 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+let supabase: SupabaseClient | null = null;
+if (supabaseUrl && supabaseKey) {
+  supabase = createClient(supabaseUrl, supabaseKey);
+}
 
 type AuthUser = {
   id: string;
@@ -51,28 +60,6 @@ const coercePersistedAuthState = (value: unknown): PersistedAuthState => {
   };
 };
 
-const getApiBaseUrl = (): string => {
-  // Check for explicit environment variables first
-  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
-  const trimmed = envUrl.replace(/\/+$/, '');
-  if (trimmed) {
-    return trimmed.endsWith('/api') ? trimmed.slice(0, -4) : trimmed;
-  }
-  
-  // For production on Render, detect and use backend URL
-  const hostname = globalThis.window?.location.hostname || '';
-  if (hostname === 'onrender.com' || hostname.endsWith('.onrender.com')) {
-    return 'https://roboto-sai-backend.onrender.com';
-  }
-  
-  // For local development
-  if (globalThis.window?.location.hostname === 'localhost' || globalThis.window?.location.hostname === '127.0.0.1') {
-    return 'http://localhost:8000';
-  }
-  
-  return '';
-};
-
 interface AuthState {
   userId: string | null;
   username: string | null;
@@ -101,87 +88,80 @@ export const useAuthStore = create<AuthState>()(
       isLoggedIn: false,
 
       refreshSession: async () => {
-        const apiBaseUrl = getApiBaseUrl();
-        const url = apiBaseUrl ? `${apiBaseUrl}/api/auth/me` : '/api/auth/me';
-        try {
-          const res = await fetch(url, { credentials: 'include' });
-          if (!res.ok) {
-            set({ userId: null, username: null, email: null, avatarUrl: null, provider: null, isLoggedIn: false });
-            return false;
-          }
-          const data = (await res.json()) as MeResponse;
-          if (!data.user?.id) {
-            set({ userId: null, username: null, email: null, avatarUrl: null, provider: null, isLoggedIn: false });
-            return false;
-          }
+        if (!supabase) {
+          // Demo mode
           set({
-            userId: data.user.id,
-            username: data.user.display_name || data.user.email?.split('@')[0] || null,
-            email: data.user.email || null,
-            avatarUrl: data.user.avatar_url || null,
-            provider: data.user.provider || null,
+            userId: 'demo-user',
+            username: 'Demo',
+            email: 'demo@example.com',
+            avatarUrl: null,
+            provider: 'demo',
             isLoggedIn: true,
           });
           return true;
-        } catch {
+        }
+        const { data, error } = await supabase.auth.getSession();
+        if (error || !data.session) {
           set({ userId: null, username: null, email: null, avatarUrl: null, provider: null, isLoggedIn: false });
           return false;
         }
+        const user = data.session.user;
+        set({
+          userId: user.id,
+          username: user.user_metadata?.display_name || user.email?.split('@')[0] || null,
+          email: user.email || null,
+          avatarUrl: user.user_metadata?.avatar_url || null,
+          provider: user.app_metadata?.provider || null,
+          isLoggedIn: true,
+        });
+        return true;
       },
 
       register: async (email: string, password: string) => {
-        const apiBaseUrl = getApiBaseUrl();
-        const url = apiBaseUrl ? `${apiBaseUrl}/api/auth/register` : '/api/auth/register';
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ email, password }),
-        });
-        if (!res.ok) {
-          const txt = await res.text().catch(() => '');
-          throw new Error(txt || 'Registration failed');
+        if (!supabase) {
+          // Demo mode, just set
+          set({
+            userId: 'demo-user',
+            username: email.split('@')[0],
+            email,
+            avatarUrl: null,
+            provider: 'demo',
+            isLoggedIn: true,
+          });
+          return;
         }
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
       },
 
       loginWithPassword: async (email: string, password: string) => {
-        const apiBaseUrl = getApiBaseUrl();
-        const url = apiBaseUrl ? `${apiBaseUrl}/api/auth/login` : '/api/auth/login';
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ email, password }),
-        });
-        if (!res.ok) {
-          const txt = await res.text().catch(() => '');
-          throw new Error(txt || 'Login failed');
+        if (!supabase) {
+          // Demo mode
+          set({
+            userId: 'demo-user',
+            username: email.split('@')[0],
+            email,
+            avatarUrl: null,
+            provider: 'demo',
+            isLoggedIn: true,
+          });
+          return;
         }
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
       },
 
       requestMagicLink: async (email: string) => {
-        const apiBaseUrl = getApiBaseUrl();
-        const url = apiBaseUrl ? `${apiBaseUrl}/api/auth/magic/request` : '/api/auth/magic/request';
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ email }),
-        });
-        if (!res.ok) {
-          const txt = await res.text().catch(() => '');
-          throw new Error(txt || 'Magic link request failed');
-        }
+        if (!supabase) throw new Error('Supabase not configured');
+        const { error } = await supabase.auth.signInWithOtp({ email });
+        if (error) throw error;
       },
 
       logout: async () => {
-        const apiBaseUrl = getApiBaseUrl();
-        const url = apiBaseUrl ? `${apiBaseUrl}/api/auth/logout` : '/api/auth/logout';
-        try {
-          await fetch(url, { method: 'POST', credentials: 'include' });
-        } finally {
-          set({ userId: null, username: null, email: null, avatarUrl: null, provider: null, isLoggedIn: false });
+        if (supabase) {
+          await supabase.auth.signOut();
         }
+        set({ userId: null, username: null, email: null, avatarUrl: null, provider: null, isLoggedIn: false });
       },
     }),
     {
@@ -204,14 +184,6 @@ export const useAuthStore = create<AuthState>()(
         }
         return parsed;
       },
-      partialize: (state) => ({
-        userId: state.userId,
-        username: state.username,
-        email: state.email,
-        avatarUrl: state.avatarUrl,
-        provider: state.provider,
-        isLoggedIn: state.isLoggedIn,
-      }),
     }
   )
 );
