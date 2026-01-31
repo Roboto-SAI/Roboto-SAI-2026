@@ -3,6 +3,7 @@
 import json
 import requests
 import time
+import os
 from urllib.parse import urljoin
 
 BASE_URL = "http://localhost:5000"
@@ -11,7 +12,7 @@ BASE_URL = "http://localhost:5000"
 print("=== Step 1: Registering user ===")
 register_data = {
     "email": "test@example.com",
-    "password": "TestPassword123!"
+    "password": os.getenv("RESPONSES_API_TEST_PASSWORD", "TestPassword123!")
 }
 
 try:
@@ -30,7 +31,7 @@ except Exception as e:
 print("\n=== Step 2: Logging in ===")
 login_data = {
     "email": "test@example.com",
-    "password": "TestPassword123!"
+    "password": os.getenv("RESPONSES_API_TEST_PASSWORD", "TestPassword123!")
 }
 
 cookies = {}
