@@ -20,21 +20,37 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_community.chat_models import ChatOpenAI 
 # using ChatOpenAI as a generic interface, will configure for XAI/Grok if compatible or use standard LLM
 # If Grok is not standard OpenAI compatible, we might need custom adapter. 
-# As per backend/grok_llm.py (seen in list), there is a custom GrokLLM.
+# As per grok_llm.py, there is a custom GrokLLM.
 
-from backend.self_code_modification import SelfCodeModificationEngine, ModificationConfig
-from backend.grok_llm import GrokLLM # Assuming this exists or using standard
+try:
+    from self_code_modification import SelfCodeModificationEngine, ModificationConfig
+    from grok_llm import GrokLLM
+    HAS_MODULES = True
+except ImportError as e:
+    logger.warning(f"Failed to import modules: {e}")
+    HAS_MODULES = False
+    SelfCodeModificationEngine = None
+    ModificationConfig = None
+    GrokLLM = None
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Initialize Self-Modification Engine
-mod_config = ModificationConfig(
-    safety_threshold=0.8,
-    enable_auto_testing=True
-)
-self_mod_engine = SelfCodeModificationEngine(config=mod_config, full_autonomy=False)
+# Initialize Self-Modification Engine (only if available)
+if HAS_MODULES and ModificationConfig and SelfCodeModificationEngine:
+    try:
+        mod_config = ModificationConfig(
+            safety_threshold=0.8,
+            enable_auto_testing=True
+        )
+        self_mod_engine = SelfCodeModificationEngine(config=mod_config, full_autonomy=False)
+    except Exception as e:
+        logger.warning(f"Failed to initialize self-modification engine: {e}")
+        self_mod_engine = None
+else:
+    logger.warning("Self-modification modules not available")
+    self_mod_engine = None
 
 # --- Tools ---
 

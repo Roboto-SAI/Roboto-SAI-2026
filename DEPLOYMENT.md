@@ -1,5 +1,14 @@
 # Roboto SAI Deployment Guide for Render
 
+## ?? CRITICAL FIXES APPLIED (Jan 31, 2026)
+
+**Two critical runtime issues have been fixed:**
+
+1. ? **Chat 503 Error Fixed** - Grok API now works with direct fallback
+2. ? **Import Errors Fixed** - Module paths corrected for PYTHONPATH
+
+**See `CRITICAL_RUNTIME_FIXES.md` for details**
+
 ## ?? CRITICAL: render.yaml Must Include dockerContext
 
 **The #1 cause of deployment failures is missing `dockerContext` in render.yaml!**

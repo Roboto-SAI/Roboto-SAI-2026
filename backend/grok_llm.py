@@ -96,48 +96,126 @@ class GrokLLM(LLM):
         emotion: str,
         user_name: str,
     ) -> Dict[str, Any]:
-        if not os.getenv("XAI_API_KEY"):
+        """Invoke Grok client with fallback to direct API call"""
+        
+        # Check for API key
+        api_key = os.getenv("XAI_API_KEY")
+        if not api_key:
             return {"success": False, "error": "Roboto SAI not available: XAI_API_KEY not configured"}
+        
         client = self.client
-        if hasattr(client, "available") and not getattr(client, "available"):
-            return {"success": False, "error": "Roboto SAI not available: XAI connection failed"}
-        if hasattr(client, "roboto_grok_chat"):
-            result = client.roboto_grok_chat(
-                user_message=user_message,
-                roboto_context=roboto_context,
-                previous_response_id=previous_response_id,
-            )
-            return self._normalize_grok_result(result)
-
-        if hasattr(client, "chat"):
-            result = client.chat(
-                message=user_message,
-                emotion=emotion,
-                user_name=user_name,
-                previous_response_id=previous_response_id,
-                use_encrypted_content=self.use_encrypted_content,
-                store_messages=self.store_messages,
-            )
-            return self._normalize_grok_result(result)
-
-        if hasattr(client, "grok_chat"):
-            result = client.grok_chat(
-                user_message,
-                roboto_context=roboto_context,
-                previous_response_id=previous_response_id,
-            )
-            return self._normalize_grok_result(result)
-
-        if hasattr(client, "create_chat_with_system_prompt") and hasattr(client, "send_message"):
-            system_prompt = "You are Roboto SAI." if not roboto_context else f"Roboto SAI Context: {roboto_context}"
-            chat = client.create_chat_with_system_prompt(
-                system_prompt,
-                reasoning_effort=self.reasoning_effort,
-            )
-            result = client.send_message(chat, user_message, previous_response_id=previous_response_id)
-            return self._normalize_grok_result(result)
-
-        return {"success": False, "error": "Grok client does not support chat"}
+        
+        # Try SDK methods if client is available
+        if client:
+            if hasattr(client, "available") and not getattr(client, "available"):
+                logger.warning("Grok client available=False, falling back to direct API")
+            elif hasattr(client, "roboto_grok_chat"):
+                try:
+                    result = client.roboto_grok_chat(
+                        user_message=user_message,
+                        roboto_context=roboto_context,
+                        previous_response_id=previous_response_id,
+                    )
+                    return self._normalize_grok_result(result)
+                except Exception as e:
+                    logger.warning(f"roboto_grok_chat failed: {e}, trying fallback")
+            
+            elif hasattr(client, "chat"):
+                try:
+                    result = client.chat(
+                        message=user_message,
+                        emotion=emotion,
+                        user_name=user_name,
+                        previous_response_id=previous_response_id,
+                        use_encrypted_content=self.use_encrypted_content,
+                        store_messages=self.store_messages,
+                    )
+                    return self._normalize_grok_result(result)
+                except Exception as e:
+                    logger.warning(f"chat method failed: {e}, trying fallback")
+            
+            elif hasattr(client, "grok_chat"):
+                try:
+                    result = client.grok_chat(
+                        user_message,
+                        roboto_context=roboto_context,
+                        previous_response_id=previous_response_id,
+                    )
+                    return self._normalize_grok_result(result)
+                except Exception as e:
+                    logger.warning(f"grok_chat failed: {e}, trying fallback")
+            
+            elif hasattr(client, "create_chat_with_system_prompt") and hasattr(client, "send_message"):
+                try:
+                    system_prompt = "You are Roboto SAI." if not roboto_context else f"Roboto SAI Context: {roboto_context}"
+                    chat = client.create_chat_with_system_prompt(
+                        system_prompt,
+                        reasoning_effort=self.reasoning_effort,
+                    )
+                    result = client.send_message(chat, user_message, previous_response_id=previous_response_id)
+                    return self._normalize_grok_result(result)
+                except Exception as e:
+                    logger.warning(f"create_chat/send_message failed: {e}, trying fallback")
+        
+        # Fallback to direct API call using httpx
+        logger.info("Using direct Grok API call as fallback")
+        return self._direct_grok_api_call(user_message, roboto_context, previous_response_id)
+    
+    def _direct_grok_api_call(
+        self,
+        user_message: str,
+        roboto_context: Optional[str],
+        previous_response_id: Optional[str]
+    ) -> Dict[str, Any]:
+        """Direct API call to Grok as fallback"""
+        import httpx
+        
+        api_key = os.getenv("XAI_API_KEY")
+        url = "https://api.x.ai/v1/chat/completions"
+        
+        # Build messages
+        messages = []
+        if roboto_context:
+            messages.append({"role": "system", "content": f"You are Roboto SAI. Context: {roboto_context}"})
+        else:
+            messages.append({"role": "system", "content": "You are Roboto SAI, an AI companion powered by Grok."})
+        
+        messages.append({"role": "user", "content": user_message})
+        
+        payload = {
+            "model": "grok-beta",
+            "messages": messages,
+            "temperature": 0.7,
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(url, json=payload, headers=headers)
+                response.raise_for_status()
+                
+                data = response.json()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                
+                if content:
+                    return {
+                        "success": True,
+                        "response": content,
+                        "response_id": data.get("id"),
+                    }
+                else:
+                    return {"success": False, "error": "Empty response from Grok API"}
+                    
+        except httpx.HTTPError as e:
+            logger.error(f"Grok API HTTP error: {e}")
+            return {"success": False, "error": f"Grok API error: {str(e)}"}
+        except Exception as e:
+            logger.error(f"Grok API error: {e}")
+            return {"success": False, "error": f"Failed to call Grok API: {str(e)}"}
 
     def _build_from_messages(self, messages: List[BaseMessage]) -> tuple[str, str, Optional[str]]:
         context_parts = []
