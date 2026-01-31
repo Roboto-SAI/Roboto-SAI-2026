@@ -642,6 +642,31 @@ class FeedbackRequest(BaseModel):
     message_id: str
     rating: int  # 1=thumbs up, -1=thumbs down
 
+# Voice WebSocket helpers
+async def _voice_client_to_xai(websocket: WebSocket, xai_ws) -> None:
+    try:
+        while True:
+            message = await websocket.receive()
+            if message.get("type") == "websocket.disconnect":
+                break
+            if "text" in message and message["text"] is not None:
+                await xai_ws.send(message["text"])
+            elif "bytes" in message and message["bytes"] is not None:
+                await xai_ws.send(message["bytes"])
+    except WebSocketDisconnect:
+        logger.info("Voice client disconnected")
+
+
+async def _voice_xai_to_client(websocket: WebSocket, xai_ws) -> None:
+    try:
+        async for message in xai_ws:
+            if isinstance(message, bytes):
+                await websocket.send_bytes(message)
+            else:
+                await websocket.send_text(message)
+    except Exception as exc:
+        logger.error(f"Voice proxy error: {exc}")
+
 # Voice WebSocket Proxy
 @app.websocket("/api/voice")
 async def voice_proxy(websocket: WebSocket) -> None:
@@ -659,31 +684,8 @@ async def voice_proxy(websocket: WebSocket) -> None:
             additional_headers={"Authorization": f"Bearer {api_key}"},
         ) as xai_ws:
 
-            async def client_to_xai() -> None:
-                try:
-                    while True:
-                        message = await websocket.receive()
-                        if message.get("type") == "websocket.disconnect":
-                            break
-                        if "text" in message and message["text"] is not None:
-                            await xai_ws.send(message["text"])
-                        elif "bytes" in message and message["bytes"] is not None:
-                            await xai_ws.send(message["bytes"])
-                except WebSocketDisconnect:
-                    logger.info("Voice client disconnected")
-
-            async def xai_to_client() -> None:
-                try:
-                    async for message in xai_ws:
-                        if isinstance(message, bytes):
-                            await websocket.send_bytes(message)
-                        else:
-                            await websocket.send_text(message)
-                except Exception as exc:
-                    logger.error(f"Voice proxy error: {exc}")
-
             await asyncio.wait(
-                {asyncio.create_task(client_to_xai()), asyncio.create_task(xai_to_client())},
+                {asyncio.create_task(_voice_client_to_xai(websocket, xai_ws)), asyncio.create_task(_voice_xai_to_client(websocket, xai_ws))},
                 return_when=asyncio.FIRST_COMPLETED,
             )
     except Exception as exc:
