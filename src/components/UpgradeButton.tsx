@@ -51,9 +51,10 @@ export const UpgradeButton = () => {
                 throw new Error(result.error.message);
             }
 
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Unknown error";
             console.error("Upgrade error:", error);
-            toast.error("Failed to start upgrade: " + error.message);
+            toast.error("Failed to start upgrade: " + message);
         } finally {
             setLoading(false);
         }

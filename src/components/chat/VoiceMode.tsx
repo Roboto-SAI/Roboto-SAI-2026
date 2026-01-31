@@ -35,6 +35,8 @@ const [isSpeaking, setIsSpeaking] = useState(false);
 const [isListening, setIsListening] = useState(false);
 const [isMuted, setIsMuted] = useState(false);
 const [transcript, setTranscript] = useState('');
+
+  const isMutedRef = useRef(isMuted);
   
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -53,6 +55,10 @@ const [transcript, setTranscript] = useState('');
   useEffect(() => {
     systemPromptRef.current = systemPrompt;
   }, [systemPrompt]);
+
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
 
   // Audio playback queue
   const playNextAudio = useCallback(async () => {
@@ -134,7 +140,7 @@ const [transcript, setTranscript] = useState('');
     return wavArray;
   };
 
-  const encodeAudioForAPI = (float32Array: Float32Array): string => {
+  const encodeAudioForAPI = useCallback((float32Array: Float32Array): string => {
     const int16Array = new Int16Array(float32Array.length);
     for (let i = 0; i < float32Array.length; i++) {
       const s = Math.max(-1, Math.min(1, float32Array[i]));
@@ -150,9 +156,9 @@ const [transcript, setTranscript] = useState('');
     }
     
     return btoa(binary);
-  };
+  }, []);
 
-  const startMicrophone = async () => {
+  const startMicrophone = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -177,7 +183,7 @@ const [transcript, setTranscript] = useState('');
       const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
       
       processor.onaudioprocess = (e) => {
-        if (wsRef.current?.readyState === WebSocket.OPEN && !isMuted) {
+        if (wsRef.current?.readyState === WebSocket.OPEN && !isMutedRef.current) {
           const inputData = e.inputBuffer.getChannelData(0);
           const encoded = encodeAudioForAPI(new Float32Array(inputData));
           
@@ -201,9 +207,9 @@ const [transcript, setTranscript] = useState('');
         description: "Please check your browser permissions and allow microphone access.",
       });
     }
-  };
+  }, [encodeAudioForAPI, toast]);
 
-  const stopMicrophone = () => {
+  const stopMicrophone = useCallback(() => {
     if (processorRef.current) {
       processorRef.current.disconnect();
       processorRef.current = null;
@@ -213,7 +219,7 @@ const [transcript, setTranscript] = useState('');
       streamRef.current = null;
     }
     setIsListening(false);
-  };
+  }, []);
 
   const connect = useCallback(async () => {
     setStatus('connecting');
@@ -375,7 +381,7 @@ const [transcript, setTranscript] = useState('');
         description: "Could not start voice mode. This feature requires backend support. Use regular chat instead.",
       });
     }
-  }, [playNextAudio]);
+  }, [playNextAudio, startMicrophone, stopMicrophone, toast]);
 
   const disconnect = useCallback(() => {
     if (wsRef.current) {
@@ -392,7 +398,7 @@ const [transcript, setTranscript] = useState('');
     setStatus('disconnected');
     setIsSpeaking(false);
     setTranscript('');
-  }, []);
+  }, [stopMicrophone]);
 
   useEffect(() => {
     if (isActive) {

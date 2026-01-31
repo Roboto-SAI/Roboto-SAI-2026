@@ -171,7 +171,7 @@ export const useChatStore = create<ChatState>()(
           const content = typeof message.content === 'string' ? message.content : '';
           return !content.startsWith('⚠️ **Connection to the flame matrix interrupted.**');
         });
-        let context = filtered
+        const context = filtered
           .map(message => {
             const safeContent = typeof message.content === 'string' ? message.content : '';
             return `${message.role}: ${safeContent.substring(0, 500)}`; // Increased truncation per message
