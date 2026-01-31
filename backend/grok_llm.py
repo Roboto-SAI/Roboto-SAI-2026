@@ -188,10 +188,51 @@ class GrokLLM(LLM):
         if custom_path:
             return [custom_path.lstrip("/")]
         return [
+            "v1/responses",
             "v1/chat/completions",
             "v1/messages",
             "chat/completions",
+            "responses",
         ]
+
+    def _build_xai_messages(
+        self,
+        user_message: str,
+        roboto_context: Optional[str],
+    ) -> list[dict[str, str]]:
+        system_content = (
+            f"You are Roboto SAI, an AI companion created by Roberto Villarreal Martinez. Context: {roboto_context}"
+            if roboto_context
+            else "You are Roboto SAI, an AI companion powered by Grok, created by Roberto Villarreal Martinez."
+        )
+        return [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": user_message},
+        ]
+
+    def _extract_response_text(self, data: Dict[str, Any]) -> Optional[str]:
+        if not isinstance(data, dict):
+            return None
+        if "choices" in data:
+            return data.get("choices", [{}])[0].get("message", {}).get("content")
+        if "output" in data and isinstance(data["output"], list):
+            for output_item in data["output"]:
+                content = output_item.get("content") if isinstance(output_item, dict) else None
+                if isinstance(content, list) and content:
+                    text = content[0].get("text") if isinstance(content[0], dict) else None
+                    if text:
+                        return text
+        content = data.get("content")
+        if isinstance(content, list) and content:
+            text = content[0].get("text") if isinstance(content[0], dict) else None
+            if text:
+                return text
+        if isinstance(content, str) and content:
+            return content
+        response_text = data.get("response")
+        if isinstance(response_text, str) and response_text:
+            return response_text
+        return None
 
     def _direct_grok_api_call(
         self,
@@ -205,28 +246,14 @@ class GrokLLM(LLM):
         api_key = os.getenv("XAI_API_KEY")
         
         base_url = self._get_xai_base_url()
-        url = f"{base_url}/v1/chat/completions"
+        url = f"{base_url}/v1/responses"
         
-        # Build messages
-        messages = []
-        if roboto_context:
-            messages.append({
-                "role": "system", 
-                "content": f"You are Roboto SAI, an AI companion created by Roberto Villarreal Martinez. Context: {roboto_context}"
-            })
-        else:
-            messages.append({
-                "role": "system", 
-                "content": "You are Roboto SAI, an AI companion powered by Grok, created by Roberto Villarreal Martinez."
-            })
-        
-        messages.append({"role": "user", "content": user_message})
+        messages = self._build_xai_messages(user_message, roboto_context)
         
         payload = {
             "model": os.getenv("XAI_MODEL", "grok-4-1-fast-reasoning"),
-            "messages": messages,
+            "input": messages,
             "stream": False,
-            "temperature": 0.7,
         }
         
         headers = {
@@ -253,15 +280,13 @@ class GrokLLM(LLM):
                 logger.debug(f"Grok API response: {data}")
                 
                 # Extract content from response
-                choices = data.get("choices", [])
-                if choices:
-                    content = choices[0].get("message", {}).get("content", "")
-                    if content:
-                        return {
-                            "success": True,
-                            "response": content,
-                            "response_id": data.get("id"),
-                        }
+                content = self._extract_response_text(data)
+                if content:
+                    return {
+                        "success": True,
+                        "response": content,
+                        "response_id": data.get("id"),
+                    }
                 
                 return {"success": False, "error": "Empty response from Grok API"}
                     
@@ -297,8 +322,14 @@ class GrokLLM(LLM):
             try:
                 logger.info(f"Trying alternate endpoint: {url}")
                 
+                if url.endswith("/responses"):
+                    payload = {
+                        "model": os.getenv("XAI_MODEL", "grok-4-1-fast-reasoning"),
+                        "input": self._build_xai_messages(user_message, roboto_context),
+                        "stream": False,
+                    }
                 # Try Anthropic-style format for /v1/messages
-                if url.endswith("/messages"):
+                elif url.endswith("/messages"):
                     payload = {
                         "model": os.getenv("XAI_MODEL", "grok-4-1-fast-reasoning"),
                         "messages": [{"role": "user", "content": user_message}],
@@ -329,14 +360,7 @@ class GrokLLM(LLM):
                         data = response.json()
                         
                         # Handle different response formats
-                        content = None
-                        if "choices" in data:
-                            content = data["choices"][0].get("message", {}).get("content")
-                        elif "content" in data:
-                            if isinstance(data["content"], list):
-                                content = data["content"][0].get("text")
-                            else:
-                                content = data["content"]
+                        content = self._extract_response_text(data)
                         
                         if content:
                             return {
