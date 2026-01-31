@@ -151,15 +151,22 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
 
       if (memError) throw memError;
 
-      // Load conversation summaries
-      const { data: summaries, error: sumError } = await supabase
-        .from('conversation_summaries')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(50);
+      // Load conversation summaries (optional - table may not exist yet)
+      let summaries = [];
+      try {
+        const { data: summaryData, error: sumError } = await supabase
+          .from('conversation_summaries')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(50);
 
-      if (sumError) throw sumError;
+        if (!sumError && summaryData) {
+          summaries = summaryData;
+        }
+      } catch (err) {
+        console.warn('conversation_summaries table not available:', err);
+      }
 
       // Load preferences
       const { data: preferences, error: prefError } = await supabase
@@ -313,6 +320,12 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         .select()
         .single();
 
+      // Handle missing table gracefully (PostgreSQL error code 42P01)
+      if (error?.code === '42P01') {
+        console.info('conversation_summaries table not yet created, skipping summary storage');
+        return null;
+      }
+      
       if (error) throw error;
 
       set((state) => ({

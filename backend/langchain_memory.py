@@ -9,7 +9,7 @@ from typing import List, Optional, Any, Dict
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 
-from .utils.supabase_client import get_async_supabase_client
+from utils.supabase_client import get_async_supabase_client
 
 
 # In-memory fallback when Supabase is not configured

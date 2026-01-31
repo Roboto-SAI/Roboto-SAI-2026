@@ -25,14 +25,15 @@ from langchain_community.chat_models import ChatOpenAI
 logger = logging.getLogger(__name__)
 
 try:
-    from .self_code_modification import SelfCodeModificationEngine, ModificationConfig
-    from .grok_llm import GrokLLM
+    from self_code_modification import SelfCodeModificationEngine, ModificationConfig
+    from grok_llm import GrokLLM
     HAS_MODULES = True
 except ImportError as e:
     logger.warning(f"Failed to import modules: {e}")
     HAS_MODULES = False
     SelfCodeModificationEngine = None
     ModificationConfig = None
+    GrokLLM = None
     GrokLLM = None
 
 router = APIRouter()
@@ -74,6 +75,7 @@ def execute_local_script(script_path: str) -> str:
     try:
         # Check if file exists
         if not os.path.exists(script_path):
+             logger.error(f"Script not found: {script_path}")
              return f"Error: File {script_path} not found."
 
         result = subprocess.run(
@@ -83,7 +85,11 @@ def execute_local_script(script_path: str) -> str:
             timeout=30
         )
         return f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    except subprocess.TimeoutExpired:
+        logger.error(f"Script execution timed out: {script_path}")
+        return "Error: Script execution timed out."
     except Exception as e:
+        logger.error(f"Execution failed for {script_path}: {e}")
         return f"Execution failed: {str(e)}"
 
 @tool

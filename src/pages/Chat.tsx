@@ -181,7 +181,16 @@ const { buildContextForAI, addMemory, addConversationSummary, trackEntity, isRea
       const data = (await response.json()) as ChatApiResponse;
 
       if (!response.ok) {
-        const errorMessage = data.detail || data.error || `Request failed (${response.status})`;
+        let errorMessage = `Request failed (${response.status})`;
+        if (data.detail) {
+           errorMessage = typeof data.detail === 'string' 
+             ? data.detail 
+             : JSON.stringify(data.detail);
+        } else if (data.error) {
+           errorMessage = typeof data.error === 'string'
+             ? data.error
+             : JSON.stringify(data.error);
+        }
         throw new Error(errorMessage);
       }
 
@@ -267,6 +276,7 @@ const { buildContextForAI, addMemory, addConversationSummary, trackEntity, isRea
         variant="ghost"
         size="icon"
         onClick={() => setSidebarOpen(true)}
+        aria-label="Toggle Sidebar"
         className="fixed left-4 top-20 z-30 bg-card/80 backdrop-blur-sm border border-border/50 hover:bg-fire/10 hover:border-fire/30"
       >
         <MessageSquare className="w-5 h-5" />
@@ -283,7 +293,7 @@ const { buildContextForAI, addMemory, addConversationSummary, trackEntity, isRea
       />
 
       {/* Chat Container */}
-      <main className="flex-1 flex flex-col pt-16">
+      <main className="flex-1 flex flex-col pt-16" aria-busy={isLoading}>
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto">
           <div className="container mx-auto max-w-4xl px-4 py-6 pl-16">

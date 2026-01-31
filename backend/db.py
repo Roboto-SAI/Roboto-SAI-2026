@@ -5,7 +5,7 @@ Database setup for Roboto SAI backend (SQLite + SQLAlchemy async).
 import os
 import logging
 from typing import AsyncGenerator
-from .utils.supabase_client import get_supabase_client
+from utils.supabase_client import get_supabase_client
 
 logger = logging.getLogger(__name__)
 

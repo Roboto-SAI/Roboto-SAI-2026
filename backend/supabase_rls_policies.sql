@@ -92,6 +92,39 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.message_feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.magic_link_tokens ENABLE ROW LEVEL SECURITY;
 
+-- ===== CONVERSATION_SUMMARIES TABLE POLICIES =====
+CREATE POLICY "Users can view own summaries" ON public.conversation_summaries
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own summaries" ON public.conversation_summaries
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own summaries" ON public.conversation_summaries
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own summaries" ON public.conversation_summaries
+  FOR DELETE USING (auth.uid() = user_id);
+
+CREATE POLICY "Service role can manage summaries" ON public.conversation_summaries
+  FOR ALL USING (auth.role() = 'service_role');
+
+-- ===== SUBSCRIPTIONS TABLE POLICIES =====
+CREATE POLICY "Users can view own subscription" ON public.subscriptions
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Service role can manage subscriptions" ON public.subscriptions
+  FOR ALL USING (auth.role() = 'service_role');
+
+-- ===== SUBSCRIPTION_EVENTS TABLE POLICIES =====
+CREATE POLICY "Users can view own subscription events" ON public.subscription_events
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Service role can manage subscription events" ON public.subscription_events
+  FOR ALL USING (auth.role() = 'service_role');
+ALTER TABLE public.conversation_summaries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.subscription_events ENABLE ROW LEVEL SECURITY;
+
 -- Create a security definer function for safe user access
 CREATE OR REPLACE FUNCTION public.get_current_user_id()
 RETURNS uuid
@@ -110,6 +143,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.auth_sessions TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.messages TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.message_feedback TO authenticated;
 GRANT SELECT ON public.magic_link_tokens TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.conversation_summaries TO authenticated;
+GRANT SELECT ON public.subscriptions TO authenticated;
+GRANT SELECT ON public.subscription_events TO authenticated;
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_messages_user_id ON public.messages(user_id);
@@ -117,3 +153,6 @@ CREATE INDEX IF NOT EXISTS idx_messages_session_id ON public.messages(session_id
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON public.auth_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_message_feedback_user_id ON public.message_feedback(user_id);
 CREATE INDEX IF NOT EXISTS idx_message_feedback_message_id ON public.message_feedback(message_id);
+CREATE INDEX IF NOT EXISTS idx_conv_summaries_user_id ON public.conversation_summaries(user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON public.subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_subscription_events_user_id ON public.subscription_events(user_id);

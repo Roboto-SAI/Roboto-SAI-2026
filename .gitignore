@@ -75,6 +75,10 @@ frontend_*_*.json
 .Roboto
 ~
 .roboto
+# Explicit ignore for local Roboto config directory placed under repo root (tilde dir)
+/~/.roboto/
+/config.json
+
 # VSCODE
 .vscode/*
 !.vscode/extensions.json

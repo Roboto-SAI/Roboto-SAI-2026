@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean
 
 # Copy requirements first (constraints.txt is optional)
-COPY backend/requirements.txt ./
+COPY requirements.txt ./
 
 # Install dependencies (without constraints if not needed)
 RUN pip install --no-cache-dir --upgrade pip && \
@@ -38,4 +38,4 @@ EXPOSE 5000
 USER roboto
 
 # Start with uvicorn using Render's PORT variable
-CMD python -m uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-5000} --log-level info
+CMD python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-5000} --log-level info

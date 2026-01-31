@@ -6,7 +6,7 @@ This file can be modified by Roboto SAI to add new capabilities and improvements
 """
 
 from datetime import datetime
-from Roboto_Ai4 import Roberto
+from roboto_sai_sdk.personality.roboto_ai4 import Roberto
 import json
 import os
 import asyncio
