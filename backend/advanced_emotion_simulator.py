@@ -37,7 +37,7 @@ except ImportError:
     VOICE_AVAILABLE = False
 
 try:
-    from personality import RobotoAi5Personality
+    from roboto_sai_sdk.personality import RobotoAi5Personality
     PERSONALITY_AVAILABLE = True
 except ImportError:
     PERSONALITY_AVAILABLE = False

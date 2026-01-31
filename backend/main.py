@@ -12,6 +12,7 @@ import asyncio
 import json
 import secrets
 import hashlib
+import re
 from urllib.parse import urlencode
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
@@ -25,7 +26,8 @@ logger = logging.getLogger(__name__)
 from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.middleware.gzip import GZipMiddleware
+from pydantic import BaseModel, Field, field_validator
 import httpx
 import websockets
 from dotenv import load_dotenv
@@ -54,6 +56,8 @@ from advanced_emotion_simulator import AdvancedEmotionSimulator
 from grok_llm import GrokLLM
 from langchain_memory import SupabaseMessageHistory
 from utils.supabase_client import get_supabase_client
+from utils.redis_client import cache_get, cache_set, cache_delete
+from utils.rate_limiter import limiter, RateLimitExceeded, _rate_limit_exceeded_handler
 from db import init_db
 from payments import router as payments_router
 
@@ -195,6 +199,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    if (os.getenv("PYTHON_ENV") or "").strip().lower() == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 # Mount optional routers with graceful fallback
 try:
@@ -359,6 +379,7 @@ class RegisterRequest(BaseModel):
     password: str
 
 @app.post("/api/auth/register", tags=["Auth"])
+@limiter.limit("5/minute")
 async def auth_register(req: RegisterRequest, request: Request) -> JSONResponse:
     """Register new user with Supabase Auth + local session."""
     supabase = _require_supabase()
@@ -404,6 +425,7 @@ class LoginRequest(BaseModel):
     password: str
 
 @app.post("/api/auth/login", tags=["Auth"])
+@limiter.limit("5/minute")
 async def auth_login(req: LoginRequest, request: Request) -> JSONResponse:
     """Login with Supabase Auth + local session."""
     supabase = _require_supabase()
@@ -445,7 +467,8 @@ async def auth_login(req: LoginRequest, request: Request) -> JSONResponse:
 
 
 @app.post("/api/auth/magic/request", tags=["Auth"])
-async def auth_magic_request(req: MagicRequest) -> Dict[str, Any]:
+@limiter.limit("5/minute")
+async def auth_magic_request(request: Request, req: MagicRequest) -> Dict[str, Any]:
     """Request magic link (Supabase OTP)."""
     supabase = _require_supabase()
     
@@ -458,13 +481,28 @@ async def auth_magic_request(req: MagicRequest) -> Dict[str, Any]:
 # Pydantic Models
 class ChatMessage(BaseModel):
     """Chat message model"""
-    message: str
+    message: str = Field(..., min_length=1, max_length=10000)
     context: Optional[str] = None
     reasoning_effort: Optional[str] = "high"
     user_id: Optional[str] = None
-    session_id: Optional[str] = None
+    session_id: Optional[str] = Field(default=None, max_length=100)
     previous_response_id: Optional[str] = None
     use_encrypted_content: bool = False
+
+    @field_validator("message")
+    @classmethod
+    def sanitize_message(cls, value: str) -> str:
+        cleaned = value.strip()
+        if any(token in cleaned.lower() for token in ["<script", "javascript:", "onerror="]):
+            raise ValueError("Invalid message content")
+        return cleaned
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, value: Optional[str]) -> Optional[str]:
+        if value and not re.match(r"^[a-zA-Z0-9_-]+$", value):
+            raise ValueError("Invalid session_id format")
+        return value
 
 class EmotionSimRequest(BaseModel):
     """Emotion simulation request."""
@@ -480,6 +518,26 @@ class EmotionFeedbackRequest(BaseModel):
     emotion: str
     rating: float
     psych_context: Optional[bool] = False
+
+
+class ConversationSummaryRequest(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=200)
+    message_limit: int = Field(default=50, ge=1, le=200)
+    summary: Optional[str] = None
+    key_topics: list[str] = Field(default_factory=list)
+    sentiment: Optional[str] = None
+    sentiment_score: Optional[float] = None
+    importance: float = Field(default=1.0, ge=0, le=10)
+    entities: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None
+    conversation_start: Optional[datetime] = None
+    conversation_end: Optional[datetime] = None
+
+
+class ConversationSummarySearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=500)
+    limit: int = Field(default=10, ge=1, le=50)
+    session_id: Optional[str] = None
 
 class ReaperRequest(BaseModel):
     """Reaper mode request"""
@@ -499,6 +557,79 @@ class EssenceData(BaseModel):
     """Essence storage request"""
     data: Dict[str, Any]
     category: Optional[str] = "general"
+
+
+def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
+    try:
+        return json.loads(text)
+    except Exception:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            return None
+        try:
+            return json.loads(text[start:end + 1])
+        except Exception:
+            return None
+
+
+async def _generate_summary_from_messages(messages: list[Dict[str, Any]], user_name: str) -> Dict[str, Any]:
+    if not messages:
+        return {
+            "summary": "No messages found for this session.",
+            "key_topics": [],
+            "sentiment": "neutral",
+            "sentiment_score": 0.0,
+            "entities": {},
+        }
+
+    transcript = "\n".join(
+        f"{msg.get('role', 'user')}: {msg.get('content', '')}" for msg in messages
+    )
+
+    if not grok_llm:
+        return {
+            "summary": f"Conversation with {len(messages)} messages. Latest message: {messages[-1].get('content', '')[:200]}",
+            "key_topics": [],
+            "sentiment": "neutral",
+            "sentiment_score": 0.0,
+            "entities": {},
+        }
+
+    prompt = (
+        "Summarize the following conversation for the user. "
+        "Return JSON with fields: summary, key_topics (array), sentiment (positive/negative/neutral/mixed), "
+        "sentiment_score (-1 to 1), entities (object).\n\n"
+        f"User: {user_name}\nConversation:\n{transcript}"
+    )
+
+    result = await grok_llm.acall_with_response_id(prompt)
+    if not result.get("success"):
+        return {
+            "summary": "Summary generation failed.",
+            "key_topics": [],
+            "sentiment": "neutral",
+            "sentiment_score": 0.0,
+            "entities": {},
+        }
+
+    payload = _extract_json_payload(result.get("response", ""))
+    if not payload:
+        return {
+            "summary": result.get("response", ""),
+            "key_topics": [],
+            "sentiment": "neutral",
+            "sentiment_score": 0.0,
+            "entities": {},
+        }
+
+    return {
+        "summary": payload.get("summary") or "",
+        "key_topics": payload.get("key_topics") or [],
+        "sentiment": payload.get("sentiment") or "neutral",
+        "sentiment_score": payload.get("sentiment_score") or 0.0,
+        "entities": payload.get("entities") or {},
+    }
 
 class FeedbackRequest(BaseModel):
     """Message feedback request"""
@@ -628,8 +759,10 @@ async def get_emotion_stats() -> Dict[str, Any]:
 
 # Chat Endpoints
 @app.post("/api/chat", tags=["Chat"])
+@limiter.limit("30/minute")
 async def chat_with_grok(
-    request: ChatMessage,
+    request: Request,
+    chat_request: ChatMessage,
     user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
@@ -644,7 +777,7 @@ async def chat_with_grok(
         logger.info("Grok not available, providing demo response")
         
         # Still try to save/load history if possible
-        session_id = request.session_id or "default"
+        session_id = chat_request.session_id or "default"
         user_emotion = None
         assistant_emotion = None
         
@@ -661,14 +794,14 @@ async def chat_with_grok(
         if emotion_simulator:
             try:
                 emotion_text = emotion_simulator.safe_simulate_emotion(
-                    event=request.message,
+                    event=chat_request.message,
                     intensity=5,
                     blend_threshold=0.8,
                     holistic_influence=False,
                     cultural_context=None,
                 )
                 base_emotion = emotion_simulator.get_current_emotion()
-                probabilities = emotion_simulator.get_emotion_probabilities(request.message)
+                probabilities = emotion_simulator.get_emotion_probabilities(chat_request.message)
                 user_emotion = {
                     "emotion": base_emotion,
                     "emotion_text": emotion_text,
@@ -700,7 +833,7 @@ async def chat_with_grok(
         if history_store:
             try:
                 user_message = HumanMessage(
-                    content=request.message,
+                    content=chat_request.message,
                     additional_kwargs=user_emotion or {}
                 )
                 user_message_id = await history_store.add_message(user_message)
@@ -713,6 +846,9 @@ async def chat_with_grok(
             except Exception as save_error:
                 logger.warning(f"Failed to save messages in demo mode: {save_error}")
         
+        await cache_delete(f"chat:history:{user['id']}:{session_id}")
+        await cache_delete(f"chat:history:{user['id']}:all")
+
         return {
             "success": True,
             "response": demo_response,
@@ -735,20 +871,20 @@ async def chat_with_grok(
     try:
         user_emotion: Optional[Dict[str, Any]] = None
         assistant_emotion: Optional[Dict[str, Any]] = None
-        session_id = request.session_id or "default"
+        session_id = chat_request.session_id or "default"
 
         # Compute user emotion
         if emotion_simulator:
             try:
                 emotion_text = emotion_simulator.safe_simulate_emotion(
-                    event=request.message,
+                    event=chat_request.message,
                     intensity=5,
                     blend_threshold=0.8,
                     holistic_influence=False,
                     cultural_context=None,
                 )
                 base_emotion = emotion_simulator.get_current_emotion()
-                probabilities = emotion_simulator.get_emotion_probabilities(request.message)
+                probabilities = emotion_simulator.get_emotion_probabilities(chat_request.message)
                 user_emotion = {
                     "emotion": base_emotion,
                     "emotion_text": emotion_text,
@@ -768,7 +904,7 @@ async def chat_with_grok(
         
         # Prepare user message with emotion
         user_message = HumanMessage(
-            content=request.message,
+            content=chat_request.message,
             additional_kwargs=user_emotion or {}
         )
         
@@ -780,7 +916,7 @@ async def chat_with_grok(
             all_messages,
             emotion=user_emotion.get('emotion_text', '') if user_emotion else '',
             user_name=user.get('user_metadata', {}).get('name', 'user'),
-            previous_response_id=request.previous_response_id
+            previous_response_id=chat_request.previous_response_id
         )
         if not grok_result.get("success"):
             raise HTTPException(status_code=503, detail=grok_result.get("error", "Roboto SAI not available"))
@@ -841,6 +977,9 @@ async def chat_with_grok(
             except Exception as e:
                 logger.warning(f'Failed to store response_id: {e}')
 
+        await cache_delete(f"chat:history:{user['id']}:{session_id}")
+        await cache_delete(f"chat:history:{user['id']}:all")
+
         return {
             "success": True,
             "response": response_text,
@@ -865,45 +1004,226 @@ async def chat_with_grok(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/chat/history", tags=["Chat"])
+@limiter.limit("60/minute")
 async def get_chat_history(
-  session_id: Optional[str] = None,
-  limit: int = 50,
-  user: dict = Depends(get_current_user),
+    request: Request,
+    session_id: Optional[str] = None,
+    limit: int = 50,
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
-  """Retrieve recent chat history."""
-  supabase = get_supabase_client()
-  if supabase is None:
-    return {
-      "success": True,
-      "count": 0,
-      "messages": [],
-      "timestamp": datetime.now().isoformat(),
+    """Retrieve recent chat history."""
+    supabase = get_supabase_client()
+    if supabase is None:
+        return {
+            "success": True,
+            "count": 0,
+            "messages": [],
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    cache_key = None
+    if limit == 50:
+        cache_key = f"chat:history:{user['id']}:{session_id or 'all'}"
+        cached = await cache_get(cache_key)
+        if cached:
+            cached["cached"] = True
+            return cached
+
+    query = supabase.table('messages').select('*').eq('user_id', user['id']).order('created_at', desc=True).limit(limit)
+    if session_id:
+        query = query.eq('session_id', session_id)
+    result = await run_supabase_async(query.execute)
+    messages = result.data or []
+    response = {
+        "success": True,
+        "count": len(messages),
+        "messages": [
+            {
+                "id": msg['id'],
+                "user_id": msg['user_id'],
+                "session_id": msg['session_id'],
+                "role": msg['role'],
+                "content": msg['content'],
+                "emotion": msg['emotion'],
+                "emotion_text": msg['emotion_text'],
+                "emotion_probabilities": json.loads(msg['emotion_probabilities']) if msg['emotion_probabilities'] else None,
+                "created_at": msg['created_at'],
+            }
+            for msg in messages
+        ],
+        "timestamp": datetime.now().isoformat(),
     }
 
-  query = supabase.table('messages').select('*').eq('user_id', user['id']).order('created_at', desc=True).limit(limit)
-  if session_id:
-    query = query.eq('session_id', session_id)
-  result = await run_supabase_async(query.execute)
-  messages = result.data or []
-  return {
-    "success": True,
-    "count": len(messages),
-    "messages": [
-      {
-        "id": msg['id'],
-        "user_id": msg['user_id'],
-        "session_id": msg['session_id'],
-        "role": msg['role'],
-        "content": msg['content'],
-        "emotion": msg['emotion'],
-        "emotion_text": msg['emotion_text'],
-        "emotion_probabilities": json.loads(msg['emotion_probabilities']) if msg['emotion_probabilities'] else None,
-        "created_at": msg['created_at'],
-      }
-      for msg in messages
-    ],
-    "timestamp": datetime.now().isoformat(),
-  }
+    if cache_key:
+        await cache_set(cache_key, response, ttl=300)
+
+    return response
+
+
+    @app.post("/api/conversations/summarize", tags=["Conversations"])
+    @limiter.limit("30/minute")
+    async def create_conversation_summary(
+        request: Request,
+        payload: ConversationSummaryRequest,
+        user: dict = Depends(get_current_user),
+    ) -> Dict[str, Any]:
+        supabase = get_supabase_client()
+        if supabase is None:
+            raise HTTPException(status_code=503, detail="Supabase not configured")
+
+        query = supabase.table("messages").select("*").eq("user_id", user["id"]).eq("session_id", payload.session_id).order("created_at")
+        result = await run_supabase_async(query.execute)
+        messages = (result.data or [])[-payload.message_limit :]
+
+        summary_payload = {
+            "summary": payload.summary,
+            "key_topics": payload.key_topics,
+            "sentiment": payload.sentiment,
+            "sentiment_score": payload.sentiment_score,
+            "entities": payload.entities or {},
+        }
+
+        if not payload.summary:
+            summary_payload = await _generate_summary_from_messages(messages, user.get("display_name") or "user")
+
+        conversation_start = payload.conversation_start
+        conversation_end = payload.conversation_end
+        if messages:
+            if not conversation_start:
+                try:
+                    conversation_start = datetime.fromisoformat(messages[0]["created_at"].replace("Z", "+00:00"))
+                except Exception:
+                    conversation_start = None
+            if not conversation_end:
+                try:
+                    conversation_end = datetime.fromisoformat(messages[-1]["created_at"].replace("Z", "+00:00"))
+                except Exception:
+                    conversation_end = None
+
+        duration_minutes = None
+        if conversation_start and conversation_end:
+            duration_minutes = int((conversation_end - conversation_start).total_seconds() / 60)
+
+        data = {
+            "user_id": user["id"],
+            "session_id": payload.session_id,
+            "summary": summary_payload.get("summary") or "",
+            "key_topics": summary_payload.get("key_topics") or [],
+            "sentiment": summary_payload.get("sentiment"),
+            "sentiment_score": summary_payload.get("sentiment_score"),
+            "importance": payload.importance,
+            "entities": summary_payload.get("entities") or {},
+            "metadata": payload.metadata or {},
+            "message_count": len(messages),
+            "duration_minutes": duration_minutes,
+            "conversation_start": conversation_start.isoformat() if conversation_start else None,
+            "conversation_end": conversation_end.isoformat() if conversation_end else None,
+        }
+
+        insert_result = await run_supabase_async(lambda: supabase.table("conversation_summaries").insert(data).execute())
+        summary_row = insert_result.data[0] if insert_result.data else data
+
+        await cache_delete(f"summaries:{user['id']}:{payload.session_id}")
+        await cache_delete(f"summaries:{user['id']}:all")
+
+        return {
+            "success": True,
+            "summary": summary_row,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+
+    @app.get("/api/conversations/summaries", tags=["Conversations"])
+    @limiter.limit("60/minute")
+    async def list_conversation_summaries(
+        request: Request,
+        limit: int = 50,
+        offset: int = 0,
+        session_id: Optional[str] = None,
+        min_importance: Optional[float] = None,
+        user: dict = Depends(get_current_user),
+    ) -> Dict[str, Any]:
+        supabase = get_supabase_client()
+        if supabase is None:
+            return {"success": True, "count": 0, "summaries": [], "timestamp": datetime.now().isoformat()}
+
+        cache_key = None
+        if limit == 50 and offset == 0:
+            cache_key = f"summaries:{user['id']}:{session_id or 'all'}"
+            cached = await cache_get(cache_key)
+            if cached:
+                cached["cached"] = True
+                return cached
+
+        query = supabase.table("conversation_summaries").select("*").eq("user_id", user["id"]).order("created_at", desc=True)
+        if session_id:
+            query = query.eq("session_id", session_id)
+        if min_importance is not None:
+            query = query.gte("importance", min_importance)
+        if limit:
+            query = query.range(offset, offset + limit - 1)
+
+        result = await run_supabase_async(query.execute)
+        summaries = result.data or []
+        response = {
+            "success": True,
+            "count": len(summaries),
+            "summaries": summaries,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+        if cache_key:
+            await cache_set(cache_key, response, ttl=1800)
+
+        return response
+
+
+    @app.get("/api/conversations/summaries/{summary_id}", tags=["Conversations"])
+    @limiter.limit("60/minute")
+    async def get_conversation_summary(
+        request: Request,
+        summary_id: str,
+        user: dict = Depends(get_current_user),
+    ) -> Dict[str, Any]:
+        supabase = get_supabase_client()
+        if supabase is None:
+            raise HTTPException(status_code=503, detail="Supabase not configured")
+
+        result = await run_supabase_async(
+            lambda: supabase.table("conversation_summaries").select("*").eq("id", summary_id).eq("user_id", user["id"]).execute()
+        )
+        summary_row = result.data[0] if result.data else None
+        if not summary_row:
+            raise HTTPException(status_code=404, detail="Summary not found")
+
+        return {
+            "success": True,
+            "summary": summary_row,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+
+    @app.post("/api/conversations/search", tags=["Conversations"])
+    @limiter.limit("30/minute")
+    async def search_conversation_summaries(
+        request: Request,
+        payload: ConversationSummarySearchRequest,
+        user: dict = Depends(get_current_user),
+    ) -> Dict[str, Any]:
+        supabase = get_supabase_client()
+        if supabase is None:
+            return {"success": True, "results": [], "timestamp": datetime.now().isoformat()}
+
+        query = supabase.table("conversation_summaries").select("*").eq("user_id", user["id"]).ilike("summary", f"%{payload.query}%").order("created_at", desc=True).limit(payload.limit)
+        if payload.session_id:
+            query = query.eq("session_id", payload.session_id)
+        result = await run_supabase_async(query.execute)
+
+        return {
+            "success": True,
+            "results": result.data or [],
+            "timestamp": datetime.now().isoformat(),
+        }
 
 
 @app.post("/api/chat/feedback", tags=["Chat"])

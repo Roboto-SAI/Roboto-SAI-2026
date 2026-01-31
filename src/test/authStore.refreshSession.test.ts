@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useAuthStore } from '@/stores/authStore';
+import { config } from '@/config';
 
 describe('authStore.refreshSession', () => {
   const originalFetch = globalThis.fetch;
@@ -42,7 +43,10 @@ describe('authStore.refreshSession', () => {
     const ok = await useAuthStore.getState().refreshSession();
 
     expect(ok).toBe(true);
-    expect(fetchMock).toHaveBeenCalledWith('/api/auth/me', { credentials: 'include' });
+    expect(fetchMock).toHaveBeenCalledWith(`${config.apiBaseUrl}/api/auth/me`, {
+      method: 'GET',
+      credentials: 'include',
+    });
 
     const state = useAuthStore.getState();
     expect(state.isLoggedIn).toBe(true);

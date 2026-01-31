@@ -38,6 +38,14 @@ services:
         value: "true"
       - key: COOKIE_SAMESITE
         value: "none"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_ID_PREMIUM
+        sync: false
+      - key: STRIPE_PORTAL_CONFIG_ID
+        sync: false
     healthCheckPath: /api/health
     autoDeployTrigger: commit
 
@@ -75,7 +83,11 @@ databases:
 envVarGroups:
   - name: roboto-secrets
     envVars:
-      - key: STRIPE_API_KEY
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_ID_PREMIUM
         sync: false
       - key: SUPABASE_ANON_KEY
         sync: false

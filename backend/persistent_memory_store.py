@@ -406,7 +406,6 @@ class PersistentMemoryStore:
             existing_emotion,
             existing_importance,
             existing_emotional,
-            existing_fp,
             existing_count,
         ) = row
 

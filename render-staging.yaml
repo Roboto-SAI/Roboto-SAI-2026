@@ -1,0 +1,60 @@
+services:
+  - type: web
+    name: roboto-sai-backend-staging
+    runtime: docker
+    plan: starter
+    branch: staging
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    envVars:
+      - key: PYTHON_ENV
+        value: staging
+      - key: FRONTEND_ORIGIN
+        value: https://roboto-sai-frontend-staging.onrender.com
+      - key: FRONTEND_HASH_ROUTER
+        value: "true"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SESSION_TTL_SECONDS
+        value: "2592000"
+      - key: PYTHONPATH
+        value: "/app"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: "none"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+
+  - type: web
+    name: roboto-sai-frontend-staging
+    runtime: docker
+    plan: starter
+    branch: staging
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://roboto-sai-backend-staging.onrender.com
+      - key: VITE_API_URL
+        value: https://roboto-sai-backend-staging.onrender.com
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: NODE_ENV
+        value: staging
+    autoDeployTrigger: commit
+
+  - type: redis
+    name: roboto-sai-redis-staging
+    plan: starter
+    ipAllowList: []
