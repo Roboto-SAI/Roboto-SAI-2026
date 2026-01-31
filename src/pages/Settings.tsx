@@ -10,11 +10,13 @@ import { useChatStore } from "@/stores/chatStore";
 import { UpgradeButton } from "@/components/UpgradeButton";
 
 const Settings = () => {
-    const { user, logout } = useAuthStore();
+    const logout = useAuthStore((state) => state.logout);
+    const email = useAuthStore((state) => state.email);
+    const username = useAuthStore((state) => state.username);
     const { currentTheme, setTheme } = useChatStore();
 
-    // Derived state
-    const isPremium = user?.subscription_status === 'active';
+    // Note: subscription_status would need to be added to AuthState if premium is tracked
+    const isPremium = false;
 
     return (
         <div className="min-h-screen bg-background text-foreground">
@@ -40,11 +42,11 @@ const Settings = () => {
                             <CardContent className="space-y-4">
                                 <div className="space-y-1">
                                     <Label>Email</Label>
-                                    <Input value={user?.email || ''} readOnly className="bg-muted" />
+                                    <Input value={email || ''} readOnly className="bg-muted" />
                                 </div>
                                 <div className="space-y-1">
                                     <Label>Username</Label>
-                                    <Input value={user?.user_metadata?.username || ''} readOnly className="bg-muted" />
+                                    <Input value={username || ''} readOnly className="bg-muted" />
                                     <p className="text-xs text-muted-foreground">Username changes currently disabled.</p>
                                 </div>
                                 <div className="pt-4">

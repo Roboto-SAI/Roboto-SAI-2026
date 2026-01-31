@@ -1,34 +1,28 @@
 import { Button } from "@/components/ui/button";
-import { loadStripe } from "@stripe/stripe-js";
 import { Zap } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/stores/authStore";
 
-// Initialize Stripe outside component to avoid recreation
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "");
-
 export const UpgradeButton = () => {
     const [loading, setLoading] = useState(false);
-    const { user } = useAuthStore();
-
-    // Don't show if already premium
-    if (user?.subscription_status === 'active') {
-        return null;
-    }
+    const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
 
     const handleUpgrade = async () => {
+        if (!isLoggedIn) {
+            toast.error("Please log in to upgrade");
+            return;
+        }
+
         setLoading(true);
         try {
-            const stripe = await stripePromise;
-            if (!stripe) throw new Error("Stripe failed to load");
-
-            // Call backend to create session
+            // Call backend to create session - backend returns the checkout URL
             const response = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/create-checkout-session`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
+                credentials: "include",
                 body: JSON.stringify({
                     success_url: window.location.origin + "/chat?success=true",
                     cancel_url: window.location.origin + "/chat?canceled=true",
@@ -40,15 +34,16 @@ export const UpgradeButton = () => {
                 throw new Error(err.detail || "Failed to start checkout");
             }
 
-            const { sessionId } = await response.json();
-
-            // Redirect to checkout
-            const result = await stripe.redirectToCheckout({
-                sessionId,
-            });
-
-            if (result.error) {
-                throw new Error(result.error.message);
+            const data = await response.json();
+            
+            // Stripe Checkout Sessions return a url property for redirect
+            if (data.url) {
+                window.location.href = data.url;
+            } else if (data.sessionId) {
+                // Fallback: construct Stripe checkout URL from session ID
+                window.location.href = `https://checkout.stripe.com/c/pay/${data.sessionId}`;
+            } else {
+                throw new Error("No checkout URL returned");
             }
 
         } catch (error: unknown) {
