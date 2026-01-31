@@ -23,34 +23,17 @@ logging.basicConfig(level=log_level, format='%(asctime)s - %(name)s - %(levelnam
 logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Depends, Request
-
 from fastapi.responses import JSONResponse, RedirectResponse
-print("DEBUG: fastapi responses imported")
-
 from fastapi.middleware.cors import CORSMiddleware
-print("DEBUG: cors middleware imported")
-
 from pydantic import BaseModel
-print("DEBUG: pydantic imported")
-
-# from sqlalchemy import select
-# from sqlalchemy.ext.asyncio import AsyncSession  # Deprecated
 import httpx
-print("DEBUG: httpx imported")
-
 import websockets
-print("DEBUG: websockets imported")
-
 from dotenv import load_dotenv
-print("DEBUG: dotenv imported")
-
 import uuid
-print("DEBUG: uuid imported")
 
 # LangChain imports
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
 from langchain_core.messages import HumanMessage, AIMessage
-from dotenv import load_dotenv
 
 # Load local .env when running outside Docker
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
@@ -213,17 +196,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount optional routers with graceful fallback
+try:
+    from payments import router as payments_router
+    app.include_router(payments_router)
+    logger.info("Payments router mounted")
+except ImportError as e:
+    logger.warning(f"Payments router not available: {e}")
 
-# Mount payments router
-app.include_router(payments_router)
+try:
+    from agent_loop import router as agent_router
+    app.include_router(agent_router)
+    logger.info("Agent router mounted")
+except ImportError as e:
+    logger.warning(f"Agent router not available: {e}")
 
-# Mount agent router
-from agent_loop import router as agent_router
-app.include_router(agent_router)
-
-# Mount MCP router
-from mcp_router import router as mcp_router
-app.include_router(mcp_router)
+try:
+    from mcp_router import router as mcp_router
+    app.include_router(mcp_router)
+    logger.info("MCP router mounted")
+except ImportError as e:
+    logger.warning(f"MCP router not available: {e}")
 
 
 # Minimal health endpoints - added early before any heavy init

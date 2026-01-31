@@ -50,6 +50,18 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 # Stage 3: Build
 FROM base AS build
 
+# Accept build arguments for environment variables
+ARG VITE_API_BASE_URL
+ARG VITE_API_URL
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+
+# Set environment variables for build
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+
 # Copy application code
 COPY . .
 
@@ -61,6 +73,22 @@ FROM nginx:alpine AS production
 
 # Copy built files
 COPY --from=build /app/dist /usr/share/nginx/html
+
+# Create nginx config for SPA routing with PORT support
+COPY <<'EOF' /docker-entrypoint.d/40-port-config.sh
+#!/bin/sh
+set -e
+
+# Use PORT from environment or default to 80
+PORT=${PORT:-80}
+
+# Update nginx config with dynamic port
+sed -i "s/listen 80;/listen $PORT;/g" /etc/nginx/conf.d/default.conf
+
+echo "Nginx configured to listen on port $PORT"
+EOF
+
+RUN chmod +x /docker-entrypoint.d/40-port-config.sh
 
 # Create nginx config for SPA routing
 RUN echo 'server { \
