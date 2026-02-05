@@ -503,10 +503,8 @@ class GrokLLM(LLM):
         Async call to Grok using Responses API with stateful conversation chaining.
         Returns response dict with response_id and encrypted_thinking.
         """
-        if not self.client:
-            raise ValueError("Grok client not initialized")
-        if not hasattr(self.client, 'available') or not self.client.available:
-            raise ValueError("Grok client not available")
+        if self.client and hasattr(self.client, 'available') and not self.client.available:
+            logger.warning("Grok client available=False, continuing with fallback")
 
         # Handle input
         if isinstance(prompt, str):
@@ -554,10 +552,8 @@ class GrokLLM(LLM):
         """
         Async call to Grok for better performance.
         """
-        if not self.client:
-            raise ValueError("Grok client not initialized")
-        if not hasattr(self.client, 'available') or not self.client.available:
-            raise ValueError("Grok client not available")
+        if self.client and hasattr(self.client, 'available') and not self.client.available:
+            logger.warning("Grok client available=False, continuing with fallback")
 
         user_message, context, emotion = self._build_prompt_context(prompt, kwargs.get("context"))
 

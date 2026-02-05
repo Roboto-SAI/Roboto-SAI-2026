@@ -22,6 +22,8 @@ Authors: Roboto SAI Development Team
 import os
 import logging
 from contextlib import asynccontextmanager
+from typing import List
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -73,13 +75,20 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Configure CORS origins from environment
+frontend_origins_env = os.getenv("FRONTEND_ORIGIN", "http://localhost:8080")
+allowed_frontend_origins: List[str] = [origin.strip() for origin in frontend_origins_env.split(",") if origin.strip()]
+if not allowed_frontend_origins:
+    allowed_frontend_origins = ["http://localhost:8080"]
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=allowed_frontend_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Set-Cookie"],
 )
 
 # Rate limiting setup (if available)

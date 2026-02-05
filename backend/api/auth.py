@@ -8,6 +8,7 @@ from fastapi.security import HTTPBearer
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 import logging
+import os
 from utils.supabase_client import get_async_supabase_client
 from supabase._async.client import AsyncClient
 
@@ -50,12 +51,16 @@ async def get_supabase_client() -> AsyncClient:
 async def get_me(request: Request, supabase: AsyncClient = Depends(get_supabase_client)):
     """Get current user information from session"""
     try:
-        # Get the authorization header
+        # Accept token from Authorization header or access_token cookie
         auth_header = request.headers.get("authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return AuthResponse(success=False, message="No auth token provided")
+        token = None
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.replace("Bearer ", "")
+        else:
+            token = request.cookies.get("access_token")
 
-        token = auth_header.replace("Bearer ", "")
+        if not token:
+            return AuthResponse(success=False, message="No auth token provided")
 
         # Verify the token with Supabase
         user_response = await supabase.auth.get_user(token)
@@ -82,6 +87,7 @@ async def get_me(request: Request, supabase: AsyncClient = Depends(get_supabase_
 async def login(
     login_data: LoginRequest,
     response: Response,
+    request: Request,
     supabase: AsyncClient = Depends(get_supabase_client)
 ):
     """Login with email and password"""
@@ -103,13 +109,20 @@ async def login(
             provider=getattr(user, 'app_metadata', {}).get('provider', 'supabase')
         )
 
+        # Determine secure and samesite based on environment and request scheme
+        is_prod = (os.getenv("PYTHON_ENV") or "").strip().lower() == "production"
+        forwarded_proto = request.headers.get("x-forwarded-proto")
+        scheme = forwarded_proto or request.url.scheme
+        secure = scheme == "https" or is_prod
+        samesite = "none" if secure else "lax"
+
         # Set httpOnly cookie with the access token
         response.set_cookie(
             key="access_token",
             value=auth_response.session.access_token,
             httponly=True,
-            secure=False,  # Set to True in production with HTTPS
-            samesite="lax",
+            secure=secure,
+            samesite=samesite,
             max_age=3600  # 1 hour
         )
 
@@ -117,7 +130,14 @@ async def login(
 
     except Exception as e:
         logger.error(f"Login failed: {e}")
-        raise HTTPException(status_code=401, detail="Login failed")
+        # Check for specific Supabase error messages
+        error_str = str(e).lower()
+        if "invalid login credentials" in error_str or "email not confirmed" in error_str:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        elif "account not found" in error_str or "user not found" in error_str:
+            raise HTTPException(status_code=401, detail="Account not found")
+        else:
+            raise HTTPException(status_code=401, detail="Login failed")
 
 @router.post("/register", response_model=AuthResponse)
 async def register(

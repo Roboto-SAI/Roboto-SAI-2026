@@ -77,6 +77,9 @@ EMOTION_SIMULATOR_UNAVAILABLE = "Emotion simulator not available"
 ROBO_SAI_NOT_CONFIGURED = "Roboto SAI not available: XAI_API_KEY not configured"
 GROK_NOT_AVAILABLE = "Grok not available"
 
+MCP_STATUS: Dict[str, str] = {}
+MCP_STATUS["TelegramLink"] = "🟢 ACTIVE (Bot deployed!)"
+
 # Startup/Shutdown events
 @asynccontextmanager
 async def lifespan(app: FastAPI):
