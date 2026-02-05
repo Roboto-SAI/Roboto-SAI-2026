@@ -15,7 +15,7 @@ router = APIRouter()
 # Mount all routers
 router.include_router(health_router)
 router.include_router(status_router)
-router.include_router(auth_router)
+router.include_router(auth_router, prefix="/auth")  # Fixed: add /auth prefix
 router.include_router(chat_router)
 router.include_router(analyze_router)
 router.include_router(code_router)
