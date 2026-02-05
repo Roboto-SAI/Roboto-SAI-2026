@@ -117,4 +117,6 @@ async def perform_roaming_action(action: str, **kwargs) -> str:
         result = await client.call_tool(tool_name, kwargs)
         return result
     except Exception as e:
-        return f"Roaming action failed: {str(e)}"
+        # Log detailed error server-side, but return a generic message to the caller
+        print(f"Roaming action '{action}' failed with error: {e}", file=sys.stderr)
+        return "Roaming action failed due to an internal error."

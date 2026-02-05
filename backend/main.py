@@ -900,8 +900,9 @@ async def perform_roaming(
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
+        # Log the detailed error on the server, but return a generic message to the client
         logger.error(f"Roaming action failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Roaming action failed due to an internal server error.")
 
 # Extend chat to detect roaming commands
 # In chat_with_grok, before calling grok, check for roaming commands
