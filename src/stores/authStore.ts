@@ -5,29 +5,8 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 import { config } from '../config';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-let supabase: SupabaseClient | null = null;
-// Singleton pattern to avoid multiple GoTrueClient instances
-if (supabaseUrl && supabaseKey && typeof window !== 'undefined') {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (!(window as any).__supabaseInstance) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__supabaseInstance = createClient(supabaseUrl, supabaseKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-      }
-    });
-  }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase = (window as any).__supabaseInstance;
-}
 
 type AuthUser = {
   id: string;
